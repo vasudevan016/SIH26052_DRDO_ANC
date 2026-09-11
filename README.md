@@ -1,4 +1,6 @@
 # SIH26052 Edge-ANC System
+
+```text
 SIH26052_DRDO_ANC/
 ├── src/
 │   ├── main.cpp         # FreeRTOS dual-core tasks and I2S configuration
