@@ -1,6 +1,6 @@
 #pragma once
 
-// I2S Microphone Pins (INMP441) 
+// I2S Microphone Pins (INMP441 ) 
 #define I2S_MIC_WS 15
 #define I2S_MIC_SD 32
 #define I2S_MIC_SCK 14
