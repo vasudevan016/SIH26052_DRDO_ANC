@@ -5,7 +5,7 @@
 #define I2S_MIC_SD 32
 #define I2S_MIC_SCK 14
 
-// I2S Amplifier Pins (MAX98357A)
+// I2S Amplifier Pins (MAX98357A) 
 #define I2S_SPK_BCLK 27
 #define I2S_SPK_LRC 26
 #define I2S_SPK_DOUT 25
