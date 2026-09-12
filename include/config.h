@@ -10,7 +10,7 @@
 #define I2S_SPK_LRC 26
 #define I2S_SPK_DOUT 25
 
-// DSP Configuration
+// DSP Configuration 
 #define SAMPLE_RATE 16000
 #define DMA_BUFFER_LEN 512
 #define FILTER_TAPS 128
