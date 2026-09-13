@@ -113,13 +113,13 @@ class Ultimate_AI_ANC_Telemetry(ctk.CTk):
         elif "Gunfire" in value: self.noise_type = "gunfire"
         else: self.noise_type = "auto" # Auto Adapt to real environment
 
-    def load_file(self):
-        filepath = fd.askopenfilename(filetypes=[("WAV Audio", "*.wav")])
+   def load_file(self):
+        # parent=self forces the Windows file dialog to the front
+        filepath = fd.askopenfilename(parent=self, filetypes=[("WAV Audio", "*.wav")])
         if not filepath: return
         
         fs, data = wav.read(filepath)
-        # Normalize and convert to mono
-        if data.ndim > 1: data = data.mean(axis=1)
+        if data.ndim > 1: data = data.mean(axis=1) # Convert stereo to mono
         self.file_data = data / np.max(np.abs(data))
         self.file_idx = 0
         self.RATE = fs
@@ -136,7 +136,6 @@ class Ultimate_AI_ANC_Telemetry(ctk.CTk):
         t = np.linspace(self.time_counter, self.time_counter + frames, frames)
         self.time_counter += frames
         
-        # Determine Noise Injection based on Mode
         if self.noise_type == "tank":
             noise_ref = (np.sin(t * 0.05) * 0.5) + (np.sin(t * 0.02) * 0.3) + np.random.normal(0, 0.05, frames)
             primary_mic = base_audio + noise_ref
@@ -147,7 +146,6 @@ class Ultimate_AI_ANC_Telemetry(ctk.CTk):
             noise_ref = np.where(np.random.random(frames) > 0.98, np.random.normal(0, 1.2, frames), np.random.normal(0, 0.05, frames))
             primary_mic = base_audio + noise_ref
         else:
-            # AUTO AI ADAPT: No fake noise. Takes raw mic/file and uses self-delay as reference.
             primary_mic = base_audio
             noise_ref = np.roll(base_audio, 1) 
             
@@ -165,7 +163,7 @@ class Ultimate_AI_ANC_Telemetry(ctk.CTk):
                 error = primary_mic[i] - estimated_noise
                 cleaned[i] = error
                 
-                if not speech_present: # Only update weights if AI detects NO speech
+                if not speech_present: 
                     norm = np.dot(self.delay_line, self.delay_line) + 1e-6
                     self.weights += (self.mu * error * self.delay_line) / norm
         else:
@@ -176,24 +174,19 @@ class Ultimate_AI_ANC_Telemetry(ctk.CTk):
         self.clean_buffer = cleaned
         return cleaned
 
-    def audio_callback(self, indata, outdata, frames, time_info, status):
-        # Read from File or Mic
-        if self.audio_source == "file" and self.file_data is not None:
-            end_idx = self.file_idx + frames
-            if end_idx > len(self.file_data): 
-                self.file_idx = 0 # Loop file
-                end_idx = frames
-            base_audio = self.file_data[self.file_idx:end_idx]
-            self.file_idx = end_idx
-        else:
-            base_audio = indata[:, 0]
+    def file_callback(self, outdata, frames, time_info, status):
+        if self.file_data is None: return
+        end_idx = self.file_idx + frames
+        if end_idx > len(self.file_data): 
+            self.file_idx = 0 
+            end_idx = frames
+        base_audio = self.file_data[self.file_idx:end_idx]
+        self.file_idx = end_idx
+        outdata[:, 0] = self.process_dsp_frame(base_audio, frames)
 
-        # DSP Processing
-        cleaned = self.process_dsp_frame(base_audio, frames)
-        
-        # Output to speakers ONLY if using File (to avoid Mic feedback)
-        if self.audio_source == "file" and outdata is not None:
-            outdata[:, 0] = cleaned
+    def mic_callback(self, indata, frames, time_info, status):
+        base_audio = indata[:, 0]
+        self.process_dsp_frame(base_audio, frames)
 
     def update_plot(self):
         if not self.is_running: return
@@ -243,11 +236,11 @@ class Ultimate_AI_ANC_Telemetry(ctk.CTk):
         self.btn_toggle.configure(state="normal", fg_color="#39d353")
         self.btn_stop.configure(state="normal")
         
-        # If file, output to speakers. If mic, input only.
+        # Isolate the speaker output from the microphone input
         if self.audio_source == "file":
-            self.stream = sd.Stream(channels=1, samplerate=self.RATE, blocksize=self.CHUNK, callback=self.audio_callback)
+            self.stream = sd.OutputStream(channels=1, samplerate=self.RATE, blocksize=self.CHUNK, callback=self.file_callback)
         else:
-            self.stream = sd.InputStream(channels=1, samplerate=self.RATE, blocksize=self.CHUNK, callback=self.audio_callback)
+            self.stream = sd.InputStream(channels=1, samplerate=self.RATE, blocksize=self.CHUNK, callback=self.mic_callback)
             
         self.stream.start()
         self.update_plot()
