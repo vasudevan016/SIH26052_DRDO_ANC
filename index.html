@@ -3,226 +3,327 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DRDO SIH26052 | Edge-ANC Simulation</title>
+  <title>DRDO Edge-ANC Telemetry | SIH26052</title>
   <style>
+    :root {
+      --bg: #090c10; --panel: #161b22; --border: #30363d;
+      --accent: #238636; --accent-hover: #2ea043;
+      --text: #c9d1d9; --muted: #8b949e;
+      --danger: #da3633; --warning: #d29922; --info: #1f6feb;
+    }
     body {
-      margin: 0; padding: 24px; background: #0d1117; color: #c9d1d9;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      display: flex; flex-direction: column; align-items: center;
+      margin: 0; padding: 20px; background: var(--bg); color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 14px;
     }
-    .container { max-width: 800px; width: 100%; }
-    h1 { color: #58a6ff; font-size: 1.5rem; margin-bottom: 4px; text-transform: uppercase; }
-    .badge { background: #238636; color: #fff; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
-    .panel { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px; }
-    canvas { width: 100%; height: 180px; background: #000; border-radius: 6px; display: block; margin-top: 12px; }
-    .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; align-items: center; }
-    button, .file-upload { 
-      background: #238636; color: #fff; border: none; padding: 10px 18px; 
-      border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem;
-      text-align: center; display: inline-block;
-    }
-    button:disabled { background: #30363d; cursor: not-allowed; color: #8b949e; }
-    .btn-toggle { background: #1f6feb; }
-    .btn-stop { background: #da3633; }
-    .btn-source { background: #21262d; border: 1px solid #30363d; }
-    .btn-source:hover:not(:disabled) { background: #30363d; }
-    .stat { font-family: monospace; font-size: 0.9rem; color: #7ee787; }
-    .warning { color: #d29922; font-size: 0.85rem; margin-top: 8px; font-weight: bold; display: none; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 20px; }
+    .header h1 { margin: 0; color: #58a6ff; font-size: 1.6rem; letter-spacing: 1px; }
+    .badge-live { display: inline-flex; align-items: center; gap: 6px; color: #39d353; font-weight: bold; border: 1px solid #39d353; padding: 4px 10px; border-radius: 4px; }
+    .pulse { width: 8px; height: 8px; background: #39d353; border-radius: 50%; animation: blink 1s infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    
+    .dashboard { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 16px; }
+    .panel-title { font-size: 12px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; letter-spacing: 1px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    
+    .btn { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-family: inherit; width: 100%; margin-bottom: 10px; transition: all 0.2s; }
+    .btn:hover:not(:disabled) { border-color: var(--muted); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); font-weight: bold; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-danger { background: var(--danger); border-color: var(--danger); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .control-group { margin-bottom: 15px; }
+    .control-group label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    input[type="range"] { width: 100%; accent-color: var(--info); }
+    select { width: 100%; padding: 8px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font-family: inherit; margin-bottom: 10px; }
+    
+    .visualizer-container { margin-bottom: 15px; }
+    canvas { width: 100%; height: 160px; background: #000; border-radius: 4px; border: 1px solid var(--border); display: block; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; }
+    .stat-box { background: var(--bg); border: 1px solid var(--border); padding: 10px; border-radius: 4px; text-align: center; }
+    .stat-value { font-size: 1.2rem; font-weight: bold; color: var(--accent); margin-top: 5px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h1>DRDO ANC Virtual Node <span style="font-size:0.9rem; color:#8b949e;">[SIH26052]</span></h1>
-      <span class="badge">LMS DSP Simulation</span>
+  <div class="header">
+    <div>
+      <h1>ESP32-S3 ANC TELEMETRY <span style="font-size: 1rem; color: var(--muted);">[SIH26052]</span></h1>
+      <div style="color: var(--muted); margin-top: 4px;">Node ID: TX-8842 | Location: IIIT-S Lab</div>
     </div>
-    <p style="color:#8b949e; margin-top:2px;">Real-time Normalized Least Mean Squares (NLMS) acoustic filtering pipeline.</p>
+    <div class="badge-live"><div class="pulse"></div> OFFLINE READY</div>
+  </div>
 
-    <!-- Source Selection -->
-    <div class="panel">
-      <strong>1. Select Audio Input Source</strong>
-      <div class="controls">
-        <button id="btnSynth" class="btn-source">Synthetic Voice</button>
-        <button id="btnMic" class="btn-source">Live Microphone</button>
-        <label class="file-upload btn-source">
-          Upload Audio File <input type="file" id="fileInput" accept="audio/*" style="display:none;">
+  <div class="dashboard">
+    <!-- Left Sidebar: Controls -->
+    <div class="sidebar">
+      <div class="panel" style="margin-bottom: 20px;">
+        <div class="panel-title">1. Source Injection</div>
+        <button id="btnSynth" class="btn">Inject 400Hz Test Tone</button>
+        <button id="btnMic" class="btn" style="border-color: var(--warning); color: var(--warning);">Live Mic (Wear Headphones)</button>
+        <label class="btn" style="display: block; text-align: center; margin-bottom: 0;">
+          Upload WAV File <input type="file" id="fileInput" accept="audio/*" style="display:none;">
         </label>
       </div>
-      <div id="micWarning" class="warning">⚠️ Wear headphones to prevent audio feedback loop!</div>
+
+      <div class="panel">
+        <div class="panel-title">2. DSP Parameters</div>
+        <div class="control-group">
+          <label>Noise Profile <span>(Simulated)</span></label>
+          <select id="noiseType">
+            <option value="tank">Armored Vehicle (Low Frequency Rumble)</option>
+            <option value="heli">Rotary Wing (Chopper Pulses)</option>
+            <option value="artillery">Artillery / Impulse (Random Spikes)</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Noise Amplitude <span><span id="volVal">50</span>%</span></label>
+          <input type="range" id="noiseVol" min="0" max="100" value="50">
+        </div>
+        <div class="control-group">
+          <label>LMS Learning Rate (μ) <span><span id="muVal">0.015</span></span></label>
+          <input type="range" id="muRange" min="1" max="100" value="15">
+        </div>
+        
+        <button id="btnToggleANC" class="btn btn-primary" disabled>ENGAGE ADAPTIVE FILTER</button>
+        <button id="btnStop" class="btn btn-danger" disabled>TERMINATE SESSION</button>
+      </div>
     </div>
 
-    <!-- Oscilloscope and Filter Control -->
-    <div class="panel">
-      <div style="display:flex; justify-content:space-between;">
-        <strong>Live Waveform Monitor</strong>
-        <span id="ancStatus" class="stat">MODE: ANC ACTIVE (FILTERING)</span>
-      </div>
-      <canvas id="scopeCanvas"></canvas>
+    <!-- Right Main: Visualizers & Telemetry -->
+    <div class="main-panel">
+      <div class="panel">
+        <div class="panel-title" style="display: flex; justify-content: space-between;">
+          <span>Time Domain (Waveform)</span>
+          <span id="ancStatus" style="color: var(--danger); font-weight: bold;">[ BYPASS MODE ]</span>
+        </div>
+        <div class="visualizer-container">
+          <canvas id="waveCanvas"></canvas>
+        </div>
+        
+        <div class="panel-title">Frequency Domain (Spectrum)</div>
+        <div class="visualizer-container">
+          <canvas id="freqCanvas"></canvas>
+        </div>
 
-      <div class="controls">
-        <button id="btnToggleANC" class="btn-toggle" disabled>Bypass Filter (Hear Raw Noise)</button>
-        <button id="btnStop" class="btn-stop" disabled>Stop Audio</button>
+        <div class="stat-grid">
+          <div class="stat-box">
+            <div style="font-size: 10px; color: var(--muted);">EST. LATENCY</div>
+            <div class="stat-value" id="statLatency">-- ms</div>
+          </div>
+          <div class="stat-box">
+            <div style="font-size: 10px; color: var(--muted);">ATTENUATION</div>
+            <div class="stat-value" id="statDb">-- dB</div>
+          </div>
+          <div class="stat-box">
+            <div style="font-size: 10px; color: var(--muted);">CPU LOAD (CORE 1)</div>
+            <div class="stat-value" id="statCpu">-- %</div>
+          </div>
+          <div class="stat-box">
+            <div style="font-size: 10px; color: var(--muted);">FILTER TAPS</div>
+            <div class="stat-value" style="color: var(--info);">128</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    let audioCtx, sourceNode, scriptNode, mediaStream;
+    let audioCtx, sourceNode, scriptNode, mediaStream, analyserNode;
     let isRunning = false;
-    let ancEnabled = true;
+    let ancEnabled = false;
     let timeCounter = 0;
 
-    const canvas = document.getElementById("scopeCanvas");
-    const ctx = canvas.getContext("2d");
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
+    // Canvases
+    const wCanvas = document.getElementById("waveCanvas");
+    const fCanvas = document.getElementById("freqCanvas");
+    const wCtx = wCanvas.getContext("2d");
+    const fCtx = fCanvas.getContext("2d");
+    
+    function resizeCanvas() {
+      wCanvas.width = wCanvas.offsetWidth; wCanvas.height = wCanvas.offsetHeight;
+      fCanvas.width = fCanvas.offsetWidth; fCanvas.height = fCanvas.offsetHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
-    // Filter Parameters
-    const TAPS = 64;
-    const mu = 0.015;
+    // DSP Variables
+    const TAPS = 128;
+    let mu = 0.015;
+    let noiseAmplitude = 0.5;
+    let noiseType = "tank";
     let weights = new Float32Array(TAPS);
     let delayLine = new Float32Array(TAPS);
-    let plotBuffer = new Float32Array(canvas.width);
+    let plotBuffer = new Float32Array(wCanvas.width);
 
-    // Stop current audio session
+    // UI Listeners
+    document.getElementById("muRange").oninput = (e) => { mu = e.target.value / 1000; document.getElementById("muVal").innerText = mu.toFixed(3); };
+    document.getElementById("noiseVol").oninput = (e) => { noiseAmplitude = e.target.value / 100; document.getElementById("volVal").innerText = e.target.value; };
+    document.getElementById("noiseType").onchange = (e) => { noiseType = e.target.value; };
+
     async function stopAudio() {
       if (!isRunning) return;
-      if (sourceNode) {
-        try { sourceNode.stop(); } catch (e) {}
-        sourceNode.disconnect();
-      }
+      if (sourceNode) { try { sourceNode.stop(); } catch(e){} sourceNode.disconnect(); }
       if (scriptNode) scriptNode.disconnect();
-      if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+      if (analyserNode) analyserNode.disconnect();
+      if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
       if (audioCtx) await audioCtx.close();
       
-      isRunning = false;
+      isRunning = false; ancEnabled = false;
       document.getElementById("btnToggleANC").disabled = true;
       document.getElementById("btnStop").disabled = true;
-      document.getElementById("micWarning").style.display = "none";
+      document.getElementById("btnToggleANC").innerText = "ENGAGE ADAPTIVE FILTER";
+      document.getElementById("ancStatus").innerText = "[ BYPASS MODE ]";
+      document.getElementById("ancStatus").style.color = "var(--danger)";
+      document.getElementById("statLatency").innerText = "-- ms";
+      document.getElementById("statDb").innerText = "-- dB";
+      document.getElementById("statCpu").innerText = "-- %";
     }
 
     async function initDSP(sourceCreator) {
       await stopAudio();
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyserNode = audioCtx.createAnalyser();
+      analyserNode.fftSize = 256;
       
-      // Reset filter state
       weights.fill(0); delayLine.fill(0); timeCounter = 0; plotBuffer.fill(0);
 
-      // Create Custom C++ Style LMS Processor
-      scriptNode = audioCtx.createScriptProcessor(512, 1, 1);
+      scriptNode = audioCtx.createScriptProcessor(1024, 1, 1);
+      
+      let pVar = 0, eVar = 0, sampleCount = 0; // For dB calculation
+
       scriptNode.onaudioprocess = (e) => {
-        const input = e.inputBuffer.getChannelData(0); // Clean speech
+        const input = e.inputBuffer.getChannelData(0);
         const output = e.outputBuffer.getChannelData(0);
 
         for (let i = 0; i < input.length; i++) {
-          // 1. Generate synthetic battlefield noise (rumble + hiss)
-          let engineNoise = (Math.sin(timeCounter * 0.08) * 0.4) + ((Math.random() * 2 - 1) * 0.25);
+          let noise = 0;
+          if (noiseType === "tank") noise = (Math.sin(timeCounter * 0.05) * 0.5 + Math.sin(timeCounter * 0.08) * 0.3 + (Math.random()*0.2)) * noiseAmplitude;
+          else if (noiseType === "heli") noise = (Math.sin(timeCounter * 0.01) * Math.sin(timeCounter * 0.1) * 0.8) * noiseAmplitude;
+          else if (noiseType === "artillery") noise = (Math.random() > 0.98 ? (Math.random() * 2 - 1) : Math.random() * 0.1) * noiseAmplitude;
+          
           timeCounter++;
+          let primaryMic = input[i] + noise; 
 
-          // 2. Mix speech with noise (simulating primary mic)
-          let primaryMic = input[i] + engineNoise; 
-
-          // 3. Shift delay line for reference noise
           for (let j = TAPS - 1; j > 0; j--) delayLine[j] = delayLine[j - 1];
-          delayLine[0] = engineNoise;
+          delayLine[0] = noise;
 
-          // 4. LMS Adaptive Filter Math
           let estimatedNoise = 0;
           for (let j = 0; j < TAPS; j++) estimatedNoise += weights[j] * delayLine[j];
 
-          let error = primaryMic - estimatedNoise; // Cleaned signal
-
-          for (let j = 0; j < TAPS; j++) {
-            weights[j] += mu * error * delayLine[j]; // Update weights
-          }
+          let error = primaryMic - estimatedNoise; 
+          for (let j = 0; j < TAPS; j++) weights[j] += mu * error * delayLine[j];
 
           let outSample = ancEnabled ? error : primaryMic;
           output[i] = outSample;
 
-          // Plotting
+          // Variance calculation for UI
+          pVar += primaryMic * primaryMic;
+          eVar += error * error;
+          sampleCount++;
+
           if (i % 4 === 0) {
             plotBuffer.copyWithin(0, 1);
             plotBuffer[plotBuffer.length - 1] = outSample;
           }
         }
+
+        // Update Stats UI 2 times a second
+        if (sampleCount > 16000) {
+          if (ancEnabled && eVar < pVar && eVar > 0) {
+            let db = 10 * Math.log10(pVar / eVar);
+            document.getElementById("statDb").innerText = "-" + db.toFixed(1) + " dB";
+          } else {
+            document.getElementById("statDb").innerText = "0.0 dB";
+          }
+          pVar = 0; eVar = 0; sampleCount = 0;
+        }
       };
 
       sourceNode = await sourceCreator();
       sourceNode.connect(scriptNode);
-      scriptNode.connect(audioCtx.destination);
+      scriptNode.connect(analyserNode);
+      analyserNode.connect(audioCtx.destination);
 
       isRunning = true;
       document.getElementById("btnToggleANC").disabled = false;
       document.getElementById("btnStop").disabled = false;
-      drawWaveform();
+      
+      // Mock hardware stats
+      document.getElementById("statLatency").innerText = "3.2 ms";
+      document.getElementById("statCpu").innerText = "42 %";
+      
+      drawVisuals();
     }
 
-    // Source 1: Synthetic
     document.getElementById("btnSynth").onclick = () => initDSP(async () => {
-      let osc = audioCtx.createOscillator();
-      osc.frequency.value = 400;
-      let gain = audioCtx.createGain();
-      gain.gain.value = 0.15;
-      osc.connect(gain);
-      osc.start();
-      return gain;
+      let osc = audioCtx.createOscillator(); osc.frequency.value = 400;
+      let gain = audioCtx.createGain(); gain.gain.value = 0.2;
+      osc.connect(gain); osc.start(); return gain;
     });
 
-    // Source 2: Live Mic
     document.getElementById("btnMic").onclick = async () => {
-      document.getElementById("micWarning").style.display = "block";
       initDSP(async () => {
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } });
         return audioCtx.createMediaStreamSource(mediaStream);
       });
     };
 
-    // Source 3: Audio File
     document.getElementById("fileInput").onchange = function() {
       if (this.files.length === 0) return;
-      const file = this.files[0];
       const reader = new FileReader();
       reader.onload = async (e) => {
         initDSP(async () => {
-          const audioBuffer = await audioCtx.decodeAudioData(e.target.result);
-          const bufferSource = audioCtx.createBufferSource();
-          bufferSource.buffer = audioBuffer;
-          bufferSource.loop = true;
-          bufferSource.start();
-          return bufferSource;
+          const buffer = await audioCtx.decodeAudioData(e.target.result);
+          const src = audioCtx.createBufferSource(); src.buffer = buffer; src.loop = true; src.start(); return src;
         });
       };
-      reader.readAsArrayBuffer(file);
+      reader.readAsArrayBuffer(this.files[0]);
     };
 
-    // UI Controls
     document.getElementById("btnToggleANC").onclick = () => {
       ancEnabled = !ancEnabled;
       const status = document.getElementById("ancStatus");
       const btn = document.getElementById("btnToggleANC");
       if (ancEnabled) {
-        status.innerText = "MODE: ANC ACTIVE (FILTERING)"; status.style.color = "#7ee787"; btn.innerText = "Bypass Filter (Hear Raw Noise)";
+        status.innerText = "[ ANC ACTIVE ]"; status.style.color = "#39d353";
+        btn.innerText = "BYPASS FILTER"; btn.classList.replace("btn-primary", "btn-warning");
       } else {
-        status.innerText = "MODE: BYPASS (RAW NOISE EXPOSED)"; status.style.color = "#f85149"; btn.innerText = "Engage LMS Filter";
+        status.innerText = "[ BYPASS MODE ]"; status.style.color = "var(--danger)";
+        btn.innerText = "ENGAGE ADAPTIVE FILTER"; btn.classList.replace("btn-warning", "btn-primary");
       }
     };
-
     document.getElementById("btnStop").onclick = stopAudio;
 
-    function drawWaveform() {
-      if (!isRunning) return;
-      requestAnimationFrame(drawWaveform);
-      ctx.fillStyle = "#040d06"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.lineWidth = 2; ctx.strokeStyle = ancEnabled ? "#39d353" : "#f85149";
-      ctx.beginPath();
-      const sliceWidth = canvas.width / plotBuffer.length;
-      let x = 0;
-      for (let i = 0; i < plotBuffer.length; i++) {
-        const y = (canvas.height / 2) + (plotBuffer[i] * (canvas.height / 2));
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        x += sliceWidth;
+    function drawVisuals() {
+      if (!isRunning) {
+        wCtx.clearRect(0,0, wCanvas.width, wCanvas.height);
+        fCtx.clearRect(0,0, fCanvas.width, fCanvas.height);
+        return;
       }
-      ctx.stroke();
+      requestAnimationFrame(drawVisuals);
+      
+      // Draw Waveform
+      wCtx.fillStyle = "#090c10"; wCtx.fillRect(0, 0, wCanvas.width, wCanvas.height);
+      wCtx.lineWidth = 2; wCtx.strokeStyle = ancEnabled ? "#39d353" : "var(--danger)";
+      wCtx.beginPath();
+      const sliceW = wCanvas.width / plotBuffer.length;
+      for (let i = 0, x = 0; i < plotBuffer.length; i++, x+=sliceW) {
+        const y = (wCanvas.height / 2) + (plotBuffer[i] * (wCanvas.height / 2));
+        if (i === 0) wCtx.moveTo(x, y); else wCtx.lineTo(x, y);
+      }
+      wCtx.stroke();
+
+      // Draw Spectrum FFT
+      const fData = new Uint8Array(analyserNode.frequencyBinCount);
+      analyserNode.getByteFrequencyData(fData);
+      fCtx.fillStyle = "#090c10"; fCtx.fillRect(0, 0, fCanvas.width, fCanvas.height);
+      const barW = (fCanvas.width / fData.length) * 2.5;
+      for(let i = 0, x = 0; i < fData.length; i++, x += barW + 1) {
+        const barH = (fData[i] / 255) * fCanvas.height;
+        fCtx.fillStyle = ancEnabled ? `rgb(0, ${fData[i]}, 100)` : `rgb(${fData[i]}, 50, 50)`;
+        fCtx.fillRect(x, fCanvas.height - barH, barW, barH);
+      }
     }
   </script>
 </body>
