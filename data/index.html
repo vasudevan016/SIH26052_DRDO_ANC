@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DRDO ANC Telemetry</title>
+  <style>
+    body { background-color: #121212; color: #00ff00; font-family: monospace; text-align: center; padding: 50px; }
+    .data-box { font-size: 2rem; border: 1px solid #00ff00; padding: 20px; display: inline-block; }
+  </style>
+</head>
+<body>
+  <h1>Edge Node Status: ACTIVE</h1>
+  <p>Live Noise Cancellation Metric (dB)</p>
+  <div class="data-box" id="dspData">Awaiting Signal...</div>
+
+  <script>
+    var gateway = `ws://${window.location.hostname}/ws`;
+    var websocket;
+    
+    function initWebSocket() {
+      websocket = new WebSocket(gateway);
+      websocket.onmessage = function(event) {
+        document.getElementById('dspData').innerHTML = event.data + " dB Red.";
+      };
+    }
+    window.addEventListener('load', initWebSocket);
+  </script>
+</body>
+</html>
