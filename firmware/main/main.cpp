@@ -61,12 +61,13 @@ void set_capture(bool value) {
     portEXIT_CRITICAL(&state_mux);
 }
 
-enum class Operation { Mode, Mute, Gain, Hold, Delay, Reset };
+enum class Operation { Mode, Mute, Gain, Hold, Delay, Reset, Demo };
 struct Command { Operation operation; float value; };
 struct Snapshot {
     Settings settings;
     Metrics metrics;
     uint32_t blocks = 0, max_dsp_us = 0, late_blocks = 0, io_errors = 0, capture_drops = 0;
+    float dsp_ewma_us = 0;
     bool fault = false;
 };
 // Little endian on ESP32-S3. CRC-32 covers the 128-byte PCM payload.
@@ -96,6 +97,8 @@ bool on_rx_overflow(i2s_chan_handle_t, i2s_event_data_t*, void*) {
 void initialize_audio() {
     ESP_ERROR_CHECK(gpio_set_level(static_cast<gpio_num_t>(CONFIG_MOUNAM_MUTE), 1));
     ESP_ERROR_CHECK(gpio_set_direction(static_cast<gpio_num_t>(CONFIG_MOUNAM_MUTE), GPIO_MODE_OUTPUT));
+    ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_0, GPIO_MODE_INPUT));
+    ESP_ERROR_CHECK(gpio_set_pull_mode(GPIO_NUM_0, GPIO_PULLUP_ONLY));
     i2s_chan_config_t channel = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     channel.dma_desc_num = 3;
     channel.dma_frame_num = kBlock;
@@ -139,6 +142,9 @@ void audio_task(void*) {
                 case Operation::Hold: settings.hold = c.value != 0; break;
                 case Operation::Delay: settings.primary_delay = unsigned(c.value); engine.reset(); break;
                 case Operation::Reset: settings.muted = true; engine.reset(); warmup = 200; break;
+                case Operation::Demo:
+                    settings = Settings{}; settings.muted = false;
+                    engine.reset(); warmup = 200; break;
             }
             engine.configure(settings);
         }
@@ -169,6 +175,7 @@ void audio_task(void*) {
         gpio_set_level(static_cast<gpio_num_t>(CONFIG_MOUNAM_PROBE), 0);
         const uint32_t elapsed = uint32_t(esp_timer_get_time() - start);
         if (elapsed > s.max_dsp_us) s.max_dsp_us = elapsed;
+        s.dsp_ewma_us += 0.01f * (float(elapsed)-s.dsp_ewma_us);
         if (elapsed >= 1000000*kBlock/kSampleRate) ++s.late_blocks;
         if (warmup) { --warmup; std::memset(output, 0, sizeof(output)); }
         gpio_set_level(static_cast<gpio_num_t>(CONFIG_MOUNAM_MUTE), engine.settings().muted || warmup ? 1 : 0);
@@ -192,14 +199,15 @@ void audio_task(void*) {
         s.settings = engine.settings(); s.metrics = engine.metrics();
         // Report silence truthfully during startup.
         if (warmup) s.metrics.output_rms = 0;
-        xQueueOverwrite(snapshot_queue, &s);
+        // Control needs 10-Hz snapshots, not 500 cross-core copies per second.
+        if (s.blocks == 1 || s.blocks % 50 == 0) xQueueOverwrite(snapshot_queue, &s);
     }
 }
 void print_stats(const Snapshot& s) {
     send_text("{\"type\":\"stats\",\"status\":\"%s\",\"sample_rate\":16000,\"block_frames\":32,\"psram_bytes\":%lu,"
         "\"model\":\"%s\",\"model_id\":\"%s\",\"mode\":%u,\"muted\":%s,\"gain\":%.4f,\"hold\":%s,\"primary_delay\":%u,"
         "\"primary_rms\":%.7f,\"reference_rms\":%.7f,\"output_rms\":%.7f,\"speech_probability\":%.4f,"
-        "\"blocks\":%lu,\"max_dsp_us\":%lu,\"late_blocks\":%lu,\"rx_overflows\":%lu,"
+        "\"blocks\":%lu,\"max_dsp_us\":%lu,\"dsp_ewma_us\":%.2f,\"late_blocks\":%lu,\"rx_overflows\":%lu,"
         "\"io_errors\":%lu,\"input_clipped\":%lu,\"output_limited\":%lu,\"impulse_blocks\":%lu,"
         "\"capture_drops\":%lu}\n",
         s.fault ? "fault_reboot_required" : "streaming", (unsigned long)esp_psram_get_size(), model::kProvenance, model::kModelId,
@@ -207,7 +215,7 @@ void print_stats(const Snapshot& s) {
         s.settings.hold ? "true" : "false", s.settings.primary_delay,
         double(s.metrics.primary_rms), double(s.metrics.reference_rms), double(s.metrics.output_rms),
         double(s.metrics.speech_probability), (unsigned long)s.blocks, (unsigned long)s.max_dsp_us,
-        (unsigned long)s.late_blocks, (unsigned long)overflow_count(), (unsigned long)s.io_errors,
+        double(s.dsp_ewma_us), (unsigned long)s.late_blocks, (unsigned long)overflow_count(), (unsigned long)s.io_errors,
         (unsigned long)s.metrics.input_clipped, (unsigned long)s.metrics.output_limited,
         (unsigned long)s.metrics.impulse_blocks, (unsigned long)s.capture_drops);
 }
@@ -228,14 +236,15 @@ void handle_line(const char* line, const Snapshot& s) {
     if (capture_active()) return; // In binary mode only capture off is a valid control command.
     if (!std::strcmp(line, "stats")) { print_stats(s); return; }
     if (!std::strcmp(line, "help")) {
-        send_text("Commands: stats; mode hybrid|dsp|primary|reference; mute on|off; gain 0..1; "
+        send_text("Commands: demo; stats; mode hybrid|dsp|primary|reference; mute on|off; gain 0..1; "
             "hold on|off; delay 0..64; reset; capture on|off\n"); return;
     }
     if (s.fault) { send_text("{\"error\":\"audio fault; press RESET to reboot\"}\n"); return; }
     Command command{};
     float value;
     bool valid = true;
-    if (!std::strcmp(line, "mode primary")) command = {Operation::Mode, 0};
+    if (!std::strcmp(line, "demo")) command = {Operation::Demo, 0};
+    else if (!std::strcmp(line, "mode primary")) command = {Operation::Mode, 0};
     else if (!std::strcmp(line, "mode reference")) command = {Operation::Mode, 1};
     else if (!std::strcmp(line, "mode dsp")) command = {Operation::Mode, 2};
     else if (!std::strcmp(line, "mode hybrid")) command = {Operation::Mode, 3};
@@ -257,7 +266,9 @@ void control_task(void*) {
     bool discard = false;
     Snapshot s;
     int64_t last_stats = 0;
-    send_text("Mounam edge v1.0 | 16000 Hz | UART 921600 | output MUTED | type help\n");
+    bool raw_button = true, stable_button = true, long_press_sent = false;
+    int64_t button_changed = 0, button_pressed = 0;
+    send_text("Mounam edge v1.1 | 16000 Hz | UART 921600 | output MUTED | type help\n");
     for (;;) {
         xQueuePeek(snapshot_queue, &s, 0);
         CapturePacket packet;
@@ -277,6 +288,21 @@ void control_task(void*) {
             else discard = true;
         }
         const int64_t now = esp_timer_get_time();
+        const bool level = gpio_get_level(GPIO_NUM_0) != 0;
+        if (level != raw_button) { raw_button = level; button_changed = now; }
+        if (now-button_changed > 30000 && stable_button != raw_button) {
+            stable_button = raw_button;
+            if (!stable_button) { button_pressed = now; long_press_sent = false; }
+            else if (!long_press_sent && !s.fault) {
+                const Command button = s.settings.muted ? Command{Operation::Demo, 0}
+                    : Command{Operation::Mode, s.settings.mode == Mode::Primary ? 3.0f : 0.0f};
+                xQueueSend(command_queue, &button, 0);
+            }
+        }
+        if (!stable_button && !long_press_sent && now-button_pressed >= 1000000) {
+            const Command mute{Operation::Mute, 1};
+            xQueueSend(command_queue, &mute, 0); long_press_sent = true;
+        }
         if (!capture_active() && now-last_stats > 1000000) { print_stats(s); last_stats = now; }
         vTaskDelay(pdMS_TO_TICKS(1));
     }

@@ -2,28 +2,29 @@ name: Mounam edge verification
 on:
   push:
     branches: [main, codex/mounam-edge-from-scratch]
-    paths: ['mounam-edge/**', '.github/workflows/c-cpp.yml']
+    paths-ignore: ['firmware/prebuilt/**', 'docs/**', 'README.md']
   pull_request:
-    paths: ['mounam-edge/**', '.github/workflows/c-cpp.yml']
+    paths-ignore: ['firmware/prebuilt/**', 'docs/**', 'README.md']
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: mounam-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   host:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: mounam-edge
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: mounam-edge/requirements.txt
+          cache-dependency-path: requirements.txt
       - run: python -m pip install -r requirements.txt
       - run: make test sanitize
       - name: Exercise dataset, training and held-out evaluation
@@ -40,19 +41,26 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build ESP32-S3 N16P8 firmware
         shell: bash
-        working-directory: mounam-edge/firmware
+        working-directory: firmware
         run: |
           . /opt/esp/idf/export.sh
           idf.py set-target esp32s3
           python ../tools/check_sdkconfig.py sdkconfig
           idf.py build
+      - name: Package and check the one-file flash image
+        shell: bash
+        env:
+          MOUNAM_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          . /opt/esp/idf/export.sh
+          python -m tools.package_firmware
+          python -m tools.flash --verify-only
+          python -m tools.flash --dry-run --port /dev/ttyUSB_TEST --no-monitor
+          cd firmware/build
+          python -m esptool --chip esp32s3 merge_bin -o vendor-merged.bin @flash_args
+          cmp vendor-merged.bin ../prebuilt/mounam-esp32s3-n16p8.bin
       - uses: actions/upload-artifact@v4
         with:
           name: mounam-edge-esp32s3-n16p8
           path: |
-            mounam-edge/firmware/build/*.bin
-            mounam-edge/firmware/build/*.elf
-            mounam-edge/firmware/build/flasher_args.json
-            mounam-edge/firmware/build/bootloader/bootloader.bin
-            mounam-edge/firmware/build/partition_table/partition-table.bin
-            mounam-edge/firmware/sdkconfig
+            firmware/prebuilt/*

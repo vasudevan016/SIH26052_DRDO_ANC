@@ -6,7 +6,7 @@
 | --- | --- |
 | Portable C++ build | GCC C++17, `-Wall -Wextra -Werror -pedantic` |
 | DSP tests | I2S signed/24-bit packing, CRC, DC removal, band reconstruction, correlated-noise convergence, mute, bounded/finite output, settings limits |
-| Python tests | Six integration checks including exported-model parity, fragmented/corrupt capture, split leakage and metric correctness |
+| Python tests | Nine integration checks including model parity, capture integrity, split leakage, metric correctness, firmware fingerprints, image layout and serial selection |
 | Sanitizers | Address/undefined behavior checks pass; local leak scanning disabled because the host prevents `/proc` thread inspection |
 | Dataset/training | Seeded 90-example synthetic corpus; 60 epochs; validation selects the model |
 | Software evaluation | Separate 18-example synthetic test split; real-speech metrics not computed |
@@ -16,6 +16,21 @@
 CI explicitly verifies required N16P8 sdkconfig settings before compiling;
 `esp_psram` is an explicit component dependency so its Kconfig options are loaded.
 On the physical board, live `psram_bytes` telemetry confirms detected RAM.
+
+## Version 1.1 improvements
+
+The project is now the repository root. Legacy simulated dashboards, Wi-Fi/MQTT
+code and classic-ESP32 configuration have been removed. The simple flash path
+uses a CI-built merged image; SHA-256 and a firmware source fingerprint reject
+corrupt or stale images before opening a serial port. CI compares this merged
+image byte-for-byte against Espressif's own `merge_bin` output.
+
+Telemetry snapshots now cross cores at 10 Hz instead of 500 Hz (98% fewer queue
+copies), while audio remains 16 kHz with 2-ms processing blocks. The filter
+kernel remains the validated baseline after host profiling. A host benchmark is
+available through `make benchmark`; no MCU speedup or latency is inferred from it.
+The on-board BOOT button starts/compares the demo and supports a one-second hold
+to mute. Physical button/audio validation still needs your board.
 
 The local sanitizer command was `ASAN_OPTIONS=detect_leaks=0 make sanitize`.
 Ordinary GitHub runners can run `make sanitize` with their default leak scanner.

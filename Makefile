@@ -4,7 +4,7 @@ DSP = components/mounam_dsp
 CPP = $(DSP)/mounam_dsp.cpp
 HEADERS = $(wildcard $(DSP)/include/*.h)
 
-.PHONY: all test sanitize clean
+.PHONY: all test sanitize benchmark clean
 all: build/libmounam.so build/test_dsp
 
 build:
@@ -23,6 +23,10 @@ test: all
 sanitize: | build
 	$(CXX) $(CXXFLAGS) -g -fsanitize=address,undefined -fno-omit-frame-pointer -I$(DSP)/include $(CPP) tests/test_dsp.cpp -o build/test_dsp_sanitize
 	./build/test_dsp_sanitize
+
+benchmark: | build
+	$(CXX) $(CXXFLAGS) -I$(DSP)/include $(CPP) tests/benchmark_dsp.cpp -o build/benchmark_dsp
+	./build/benchmark_dsp
 
 clean:
 	rm -rf build

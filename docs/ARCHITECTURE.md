@@ -19,20 +19,20 @@ does **not** implement acoustic anti-noise cancellation at the eardrum. Ordinary
 earphones cannot become validated gunshot protection through this software.
 
 The architecture follows the submitted idea while correcting claims that require
-measurement. See [idea alignment](docs/IDEA_ALIGNMENT.md) for the exact boundary
+measurement. See [idea alignment](IDEA_ALIGNMENT.md) for the exact boundary
 between implemented functions and the full problem statement.
 
 ## Start here
 
-1. [Wire the two microphones and DAC](docs/WIRING.md). **Add a stereo headphone
+1. [Wire the two microphones and DAC](WIRING.md). **Add a stereo headphone
    amplifier** between the DAC and your wired earphones. Until then, use a
    powered speaker/line input for output checks, or microphone capture alone.
-2. [Build and flash from an Ubuntu terminal](docs/QUICKSTART.md). No Arduino IDE
+2. [Build and flash from an Ubuntu terminal](QUICKSTART.md). No Arduino IDE
    is needed. Firmware uses the pinned ESP-IDF v5.4.3 toolchain.
 3. Keep output muted, verify both input channels, then compare `primary`, `dsp`
    and `hybrid` modes at the same gain.
-4. [Record, train and evaluate](docs/TRAINING.md), then follow the
-   [measurement plan](docs/VALIDATION.md).
+4. [Record, train and evaluate](TRAINING.md), then follow the
+   [measurement plan](VALIDATION.md).
 
 ## Audio architecture
 
@@ -82,7 +82,7 @@ profiling-driven optimization, not an invented implementation claim.
 Host DSP, model-export parity, capture parser, evaluation and source-split checks
 are automated with `make test`. `make sanitize` runs address/undefined-behavior
 checks. GitHub Actions also builds the actual ESP32-S3 firmware with ESP-IDF.
-See the current PR checks for their result and [validation](docs/VALIDATION.md)
+See the current PR checks for their result and [validation](VALIDATION.md)
 for the release record.
 
 The included reproducible **synthetic-only** holdout has 18 examples: 13 with
@@ -94,8 +94,8 @@ speech or actual defence recordings.
 | DSP baseline | 3.32 dB | 6.98 dB |
 | Hybrid with demo MLP | 3.32 dB | 10.06 dB |
 
-Reports: [DSP](models/demo_evaluation_dsp.json),
-[hybrid](models/demo_evaluation_hybrid.json), [model provenance](models/demo_model.json).
+Reports: [DSP](../models/demo_evaluation_dsp.json),
+[hybrid](../models/demo_evaluation_hybrid.json), [model provenance](../models/demo_model.json).
 SNR >15 dB, STOI >0.85, PESQ >2.5, physical latency <5 ms, power and production
 BOM are **unverified targets**. STOI/PESQ are deliberately null in these demo
 reports. Real speech evaluation and hardware measurements remain necessary.

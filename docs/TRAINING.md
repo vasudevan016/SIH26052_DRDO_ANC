@@ -8,7 +8,7 @@ and the residual postfilter. Everything executes on the ESP32-S3 at runtime.
 
 ## Reproduce the shipped demo
 
-From `mounam-edge`, with the host virtual environment active:
+From the repository root, with the host virtual environment active:
 
 ```bash
 make
