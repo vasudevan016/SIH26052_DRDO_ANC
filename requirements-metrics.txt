@@ -1,0 +1,4 @@
+-r requirements.txt
+# Optional; installation can require a C compiler. Review PESQ licensing for your use.
+pystoi
+pesq

@@ -1,0 +1,249 @@
+{
+  "mode": "dsp",
+  "model": "synthetic_demo",
+  "gain": 0.05,
+  "model_id": "39fb8e46d422616a",
+  "split": "test",
+  "warmup_ms": 500,
+  "primary_delay": 0,
+  "manifest_sha256": "868d9e2783a4d2f169a79e3cabc67ea78b53cc721eb43f1a30b46812bef75fd5",
+  "provenance": [
+    "synthetic_demo"
+  ],
+  "summary": {
+    "input_snr_db": {
+      "mean": 3.3180067948221224,
+      "median": 2.004528796062257,
+      "count": 13
+    },
+    "output_snr_db": {
+      "mean": 6.983632958474607,
+      "median": 6.260861692724662,
+      "count": 13
+    },
+    "input_si_sdr_db": {
+      "mean": 3.3928583054920245,
+      "median": 1.9770798927410638,
+      "count": 13
+    },
+    "output_si_sdr_db": {
+      "mean": 5.513865943800462,
+      "median": 5.379259633301624,
+      "count": 13
+    },
+    "stoi": null,
+    "pesq_wb": null,
+    "noise_only_reduction_db": {
+      "mean": 33.42758238509755,
+      "median": 32.21916559658894,
+      "count": 5
+    }
+  },
+  "pairs": [
+    {
+      "path": "test-0000.npz",
+      "noise_type": "stationary",
+      "nominal_mix_snr_db": -10.0,
+      "speech": false,
+      "noise_only_reduction_db": 38.54054438144202
+    },
+    {
+      "path": "test-0001.npz",
+      "noise_type": "nonstationary",
+      "nominal_mix_snr_db": 0.0,
+      "speech": true,
+      "input_snr_db": 3.8011737596876256,
+      "output_snr_db": 1.9726161416471322,
+      "input_si_sdr_db": 4.0730743115465975,
+      "output_si_sdr_db": -1.940707259059211,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0002.npz",
+      "noise_type": "impulsive",
+      "nominal_mix_snr_db": 0.0,
+      "speech": true,
+      "input_snr_db": 4.866192818834357,
+      "output_snr_db": 6.260861692724662,
+      "input_si_sdr_db": 4.872136667251398,
+      "output_si_sdr_db": 5.379259633301624,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0003.npz",
+      "noise_type": "stationary",
+      "nominal_mix_snr_db": 15.0,
+      "speech": true,
+      "input_snr_db": 17.803243982383712,
+      "output_snr_db": 1.9865974258080437,
+      "input_si_sdr_db": 17.805730943427474,
+      "output_si_sdr_db": -0.7091700630355308,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0004.npz",
+      "noise_type": "nonstationary",
+      "nominal_mix_snr_db": 5.0,
+      "speech": false,
+      "noise_only_reduction_db": 35.591692718282594
+    },
+    {
+      "path": "test-0005.npz",
+      "noise_type": "impulsive",
+      "nominal_mix_snr_db": 5.0,
+      "speech": true,
+      "input_snr_db": 9.336055821885425,
+      "output_snr_db": 18.956102571153128,
+      "input_si_sdr_db": 9.311126025399735,
+      "output_si_sdr_db": 19.60857425508005,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0006.npz",
+      "noise_type": "stationary",
+      "nominal_mix_snr_db": 15.0,
+      "speech": true,
+      "input_snr_db": -0.2775718238620615,
+      "output_snr_db": 6.492591952518726,
+      "input_si_sdr_db": 0.09540537598983714,
+      "output_si_sdr_db": 5.459672516324504,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0007.npz",
+      "noise_type": "nonstationary",
+      "nominal_mix_snr_db": -5.0,
+      "speech": true,
+      "input_snr_db": -15.11937221959133,
+      "output_snr_db": 3.305274858867957,
+      "input_si_sdr_db": -14.966027541599168,
+      "output_si_sdr_db": 2.3244068865038297,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0008.npz",
+      "noise_type": "impulsive",
+      "nominal_mix_snr_db": 5.0,
+      "speech": false,
+      "noise_only_reduction_db": 32.21916559658894
+    },
+    {
+      "path": "test-0009.npz",
+      "noise_type": "stationary",
+      "nominal_mix_snr_db": -5.0,
+      "speech": true,
+      "input_snr_db": -2.2157006213243693,
+      "output_snr_db": 2.9219005389310744,
+      "input_si_sdr_db": -2.239544515742692,
+      "output_si_sdr_db": -0.16819567529679175,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0010.npz",
+      "noise_type": "nonstationary",
+      "nominal_mix_snr_db": -5.0,
+      "speech": true,
+      "input_snr_db": -3.0949583629540007,
+      "output_snr_db": 4.312978677572681,
+      "input_si_sdr_db": -3.063806218177241,
+      "output_si_sdr_db": 2.4048868338136895,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0011.npz",
+      "noise_type": "impulsive",
+      "nominal_mix_snr_db": 0.0,
+      "speech": true,
+      "input_snr_db": 2.004528796062257,
+      "output_snr_db": 18.60280957585369,
+      "input_si_sdr_db": 1.9770798927410638,
+      "output_si_sdr_db": 18.986415159811298,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0012.npz",
+      "noise_type": "stationary",
+      "nominal_mix_snr_db": 10.0,
+      "speech": false,
+      "noise_only_reduction_db": 31.76612564742953
+    },
+    {
+      "path": "test-0013.npz",
+      "noise_type": "nonstationary",
+      "nominal_mix_snr_db": 10.0,
+      "speech": true,
+      "input_snr_db": 10.567989112178173,
+      "output_snr_db": 9.426438288060137,
+      "input_si_sdr_db": 10.557538531652845,
+      "output_si_sdr_db": 9.349393293375508,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0014.npz",
+      "noise_type": "impulsive",
+      "nominal_mix_snr_db": 15.0,
+      "speech": true,
+      "input_snr_db": 21.460245296928065,
+      "output_snr_db": 7.629959400984131,
+      "input_si_sdr_db": 21.459785763739944,
+      "output_si_sdr_db": 7.713045929032994,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0015.npz",
+      "noise_type": "stationary",
+      "nominal_mix_snr_db": -10.0,
+      "speech": true,
+      "input_snr_db": -6.198672356401885,
+      "output_snr_db": 1.4509702269097162,
+      "input_si_sdr_db": -5.970333127389726,
+      "output_si_sdr_db": -3.886715754679696,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    },
+    {
+      "path": "test-0016.npz",
+      "noise_type": "nonstationary",
+      "nominal_mix_snr_db": 10.0,
+      "speech": false,
+      "noise_only_reduction_db": 29.02038358174468
+    },
+    {
+      "path": "test-0017.npz",
+      "noise_type": "impulsive",
+      "nominal_mix_snr_db": 0.0,
+      "speech": true,
+      "input_snr_db": 0.20093412886161896,
+      "output_snr_db": 7.46812710913882,
+      "input_si_sdr_db": 0.19499186255625575,
+      "output_si_sdr_db": 7.159391514233731,
+      "stoi": null,
+      "pesq_wb": null,
+      "perceptual_status": "not_requested"
+    }
+  ],
+  "notes": "Offline software evaluation. No hardware latency, acoustic attenuation, power or real defence performance is inferred."
+}
