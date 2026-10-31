@@ -11,7 +11,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include <atomic>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -22,7 +21,6 @@
 #error "Use ESP-IDF v5.4.3 (the tested/pinned toolchain)."
 #endif
 static_assert(CONFIG_IDF_TARGET_ESP32S3, "This firmware targets ESP32-S3, not classic ESP32.");
-static_assert(std::atomic<uint32_t>::is_always_lock_free, "ISR counter must be lock-free.");
 static_assert(CONFIG_MOUNAM_BCLK != CONFIG_MOUNAM_WS && CONFIG_MOUNAM_BCLK != CONFIG_MOUNAM_DIN
     && CONFIG_MOUNAM_BCLK != CONFIG_MOUNAM_DOUT && CONFIG_MOUNAM_WS != CONFIG_MOUNAM_DIN
     && CONFIG_MOUNAM_WS != CONFIG_MOUNAM_DOUT && CONFIG_MOUNAM_DIN != CONFIG_MOUNAM_DOUT,
@@ -39,8 +37,28 @@ using namespace mounam;
 constexpr uart_port_t kUart = UART_NUM_0;
 i2s_chan_handle_t tx_channel, rx_channel;
 QueueHandle_t command_queue, snapshot_queue, capture_queue;
-std::atomic<uint32_t> rx_overflows{0};
-std::atomic<bool> capturing{false};
+// ESP-IDF disables hardware atomics on this target. Keep these critical sections
+// to a single load/store; never use a potentially locking C++ atomic in the ISR.
+portMUX_TYPE state_mux = portMUX_INITIALIZER_UNLOCKED;
+uint32_t rx_overflows = 0;
+bool capturing = false;
+uint32_t overflow_count() {
+    portENTER_CRITICAL(&state_mux);
+    const uint32_t result = rx_overflows;
+    portEXIT_CRITICAL(&state_mux);
+    return result;
+}
+bool capture_active() {
+    portENTER_CRITICAL(&state_mux);
+    const bool result = capturing;
+    portEXIT_CRITICAL(&state_mux);
+    return result;
+}
+void set_capture(bool value) {
+    portENTER_CRITICAL(&state_mux);
+    capturing = value;
+    portEXIT_CRITICAL(&state_mux);
+}
 
 enum class Operation { Mode, Mute, Gain, Hold, Delay, Reset };
 struct Command { Operation operation; float value; };
@@ -69,7 +87,9 @@ void send_text(const char* format, ...) {
     if (n > 0) uart_write_bytes(kUart, line, size_t(n) < sizeof(line) ? size_t(n) : sizeof(line)-1);
 }
 bool on_rx_overflow(i2s_chan_handle_t, i2s_event_data_t*, void*) {
-    rx_overflows.fetch_add(1, std::memory_order_relaxed);
+    portENTER_CRITICAL_ISR(&state_mux);
+    ++rx_overflows;
+    portEXIT_CRITICAL_ISR(&state_mux);
     return false;
 }
 void initialize_audio() {
@@ -123,7 +143,7 @@ void audio_task(void*) {
         }
         size_t bytes = 0;
         const esp_err_t read_result = i2s_channel_read(rx_channel, rx, sizeof(rx), &bytes, 20);
-        const uint32_t overflows = rx_overflows.load(std::memory_order_relaxed);
+        const uint32_t overflows = overflow_count();
         if (read_result != ESP_OK || bytes != sizeof(rx) || overflows != previous_overflows) {
             ++s.io_errors; s.fault = true;
         }
@@ -158,7 +178,7 @@ void audio_task(void*) {
             ++s.io_errors; s.fault = true;
             gpio_set_level(static_cast<gpio_num_t>(CONFIG_MOUNAM_MUTE), 1);
         }
-        if (capturing.load(std::memory_order_relaxed) && !warmup) {
+        if (capture_active() && !warmup) {
             CapturePacket packet;
             packet.sequence = s.blocks; packet.drops = s.capture_drops;
             for (size_t i = 0; i < kBlock; ++i) {
@@ -186,7 +206,7 @@ void print_stats(const Snapshot& s) {
         s.settings.hold ? "true" : "false", s.settings.primary_delay,
         double(s.metrics.primary_rms), double(s.metrics.reference_rms), double(s.metrics.output_rms),
         double(s.metrics.speech_probability), (unsigned long)s.blocks, (unsigned long)s.max_dsp_us,
-        (unsigned long)s.late_blocks, (unsigned long)rx_overflows.load(), (unsigned long)s.io_errors,
+        (unsigned long)s.late_blocks, (unsigned long)overflow_count(), (unsigned long)s.io_errors,
         (unsigned long)s.metrics.input_clipped, (unsigned long)s.metrics.output_limited,
         (unsigned long)s.metrics.impulse_blocks, (unsigned long)s.capture_drops);
 }
@@ -198,13 +218,13 @@ bool parse_number(const char* text, float low, float high, float& result) {
 void handle_line(const char* line, const Snapshot& s) {
     if (!std::strcmp(line, "capture on")) {
         if (s.fault) { send_text("{\"error\":\"audio fault; reboot board\"}\n"); return; }
-        xQueueReset(capture_queue); capturing.store(true); return;
+        xQueueReset(capture_queue); set_capture(true); return;
     }
     if (!std::strcmp(line, "capture off")) {
-        capturing.store(false); xQueueReset(capture_queue);
+        set_capture(false); xQueueReset(capture_queue);
         send_text("{\"capture\":false}\n"); return;
     }
-    if (capturing.load()) return; // In binary mode only capture off is a valid control command.
+    if (capture_active()) return; // In binary mode only capture off is a valid control command.
     if (!std::strcmp(line, "stats")) { print_stats(s); return; }
     if (!std::strcmp(line, "help")) {
         send_text("Commands: stats; mode hybrid|dsp|primary|reference; mute on|off; gain 0..1; "
@@ -241,7 +261,7 @@ void control_task(void*) {
         xQueuePeek(snapshot_queue, &s, 0);
         CapturePacket packet;
         for (unsigned n = 0; n < 8 && xQueueReceive(capture_queue, &packet, 0) == pdTRUE; ++n) {
-            if (capturing.load()) uart_write_bytes(kUart, &packet, sizeof(packet));
+            if (capture_active()) uart_write_bytes(kUart, &packet, sizeof(packet));
         }
         uint8_t input[96];
         const int received = uart_read_bytes(kUart, input, sizeof(input), pdMS_TO_TICKS(1));
@@ -250,13 +270,13 @@ void control_task(void*) {
             if (ch == '\r') continue;
             if (ch == '\n') {
                 if (!discard) { line[used] = 0; if (used) handle_line(line, s); }
-                else if (!capturing.load()) send_text("{\"error\":\"command too long\"}\n");
+                else if (!capture_active()) send_text("{\"error\":\"command too long\"}\n");
                 used = 0; discard = false;
             } else if (used+1 < sizeof(line) && !discard) line[used++] = ch;
             else discard = true;
         }
         const int64_t now = esp_timer_get_time();
-        if (!capturing.load() && now-last_stats > 1000000) { print_stats(s); last_stats = now; }
+        if (!capture_active() && now-last_stats > 1000000) { print_stats(s); last_stats = now; }
         vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
