@@ -1,0 +1,12 @@
+build/
+firmware/build/
+firmware/sdkconfig
+firmware/sdkconfig.old
+__pycache__/
+.venv/
+data/*
+!data/README.md
+*.wav
+*.npz
+*.jsonl
+!models/*.json

@@ -1,23 +1,57 @@
-name: C/C++ CI
-
+name: Mounam edge verification
 on:
   push:
-    branches: [ "main" ]
+    branches: [main, codex/mounam-edge-from-scratch]
+    paths: ['mounam-edge/**', '.github/workflows/c-cpp.yml']
   pull_request:
-    branches: [ "main" ]
+    paths: ['mounam-edge/**', '.github/workflows/c-cpp.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mounam-edge
     steps:
-    - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: mounam-edge/requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - run: make test sanitize
+      - name: Exercise dataset, training and held-out evaluation
+        run: |
+          python -m ml.make_dataset --demo --output /tmp/mounam-ci --examples 30
+          OPENBLAS_NUM_THREADS=1 python -m ml.train --manifest /tmp/mounam-ci/manifest.jsonl --model /tmp/smoke-model.json --header /tmp/smoke-weights.h --epochs 3
+          python -m tools.evaluate --manifest /tmp/mounam-ci/manifest.jsonl --output build/ci-demo-evaluation.json
+
+  firmware:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container: espressif/idf:v5.4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ESP32-S3 N16P8 firmware
+        shell: bash
+        working-directory: mounam-edge/firmware
+        run: |
+          . /opt/esp/idf/export.sh
+          idf.py set-target esp32s3
+          idf.py build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mounam-edge-esp32s3-n16p8
+          path: |
+            mounam-edge/firmware/build/*.bin
+            mounam-edge/firmware/build/*.elf
+            mounam-edge/firmware/build/flasher_args.json
+            mounam-edge/firmware/build/bootloader/bootloader.bin
+            mounam-edge/firmware/build/partition_table/partition-table.bin
+            mounam-edge/firmware/sdkconfig

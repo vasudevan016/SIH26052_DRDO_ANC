@@ -1,0 +1,26 @@
+menu "Mounam board wiring"
+    config MOUNAM_BCLK
+        int "Shared I2S BCLK GPIO"
+        range 1 21
+        default 4
+    config MOUNAM_WS
+        int "Shared I2S WS GPIO"
+        range 1 21
+        default 5
+    config MOUNAM_DIN
+        int "Two microphones shared SD GPIO"
+        range 1 21
+        default 6
+    config MOUNAM_DOUT
+        int "DAC DIN GPIO"
+        range 1 21
+        default 7
+    config MOUNAM_PROBE
+        int "DSP timing probe GPIO"
+        range 1 21
+        default 10
+    config MOUNAM_MUTE
+        int "DAC active-high MUTE GPIO (wire to DAC MUTE)"
+        range 1 21
+        default 8
+endmenu
