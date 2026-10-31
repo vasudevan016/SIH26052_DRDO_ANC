@@ -7,6 +7,7 @@
 #include "esp_err.h"
 #include "esp_idf_version.h"
 #include "esp_log.h"
+#include "esp_psram.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -195,13 +196,13 @@ void audio_task(void*) {
     }
 }
 void print_stats(const Snapshot& s) {
-    send_text("{\"type\":\"stats\",\"status\":\"%s\",\"sample_rate\":16000,\"block_frames\":32,"
+    send_text("{\"type\":\"stats\",\"status\":\"%s\",\"sample_rate\":16000,\"block_frames\":32,\"psram_bytes\":%lu,"
         "\"model\":\"%s\",\"model_id\":\"%s\",\"mode\":%u,\"muted\":%s,\"gain\":%.4f,\"hold\":%s,\"primary_delay\":%u,"
         "\"primary_rms\":%.7f,\"reference_rms\":%.7f,\"output_rms\":%.7f,\"speech_probability\":%.4f,"
         "\"blocks\":%lu,\"max_dsp_us\":%lu,\"late_blocks\":%lu,\"rx_overflows\":%lu,"
         "\"io_errors\":%lu,\"input_clipped\":%lu,\"output_limited\":%lu,\"impulse_blocks\":%lu,"
         "\"capture_drops\":%lu}\n",
-        s.fault ? "fault_reboot_required" : "streaming", model::kProvenance, model::kModelId,
+        s.fault ? "fault_reboot_required" : "streaming", (unsigned long)esp_psram_get_size(), model::kProvenance, model::kModelId,
         unsigned(s.settings.mode), s.settings.muted ? "true" : "false", double(s.settings.output_gain),
         s.settings.hold ? "true" : "false", s.settings.primary_delay,
         double(s.metrics.primary_rms), double(s.metrics.reference_rms), double(s.metrics.output_rms),
@@ -283,6 +284,7 @@ void control_task(void*) {
 }
 extern "C" void app_main() {
     esp_log_level_set("*", ESP_LOG_NONE);
+    ESP_ERROR_CHECK(esp_psram_is_initialized() ? ESP_OK : ESP_ERR_INVALID_STATE);
     // Neither Wi-Fi nor Bluetooth is initialized; no networking components are linked explicitly.
     uart_config_t uart{};
     uart.baud_rate = 921600; uart.data_bits = UART_DATA_8_BITS; uart.parity = UART_PARITY_DISABLE;

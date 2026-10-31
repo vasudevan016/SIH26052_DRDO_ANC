@@ -1,27 +1,30 @@
-# 🛡️ DRDO Edge-ANC Virtual Node [SIH26052]
+# Mounam edge - SIH26052
 
-An AI/ML-enabled Active Noise Cancellation (ANC) telemetry dashboard and edge-compute architecture designed for high-noise tactical environments (armored vehicles, rotary-wing aircraft, artillery zones). 
+The new standalone project is in **[mounam-edge](mounam-edge/README.md)**.
 
-**Target Hardware:** ESP32-S3 (Core 1 pinned for DSP)
-**Latency Target:** < 5ms (Sub-perceptual)
-**Algorithmic Approach:** TinyML-driven Spectral Masking & LMS Adaptive Filtering
+It implements the submitted **Edge-Computed Tactical Active Noise Cancellation
+(ANC) Node**, Idea 180588, for:
 
-## 📡 System Architecture
-This repository contains the Command & Control (C2) Python telemetry interface and the embedded C++ DSP logic.
-1. **Input:** I2S MEMS Microphone captures raw acoustic data (Speech + Combat Noise).
-2. **Edge Processing:** ESP32-S3 bypasses standard CPU overhead using Direct Memory Access (DMA). A Recurrent Neural Network (RNN) extracts Mel-frequency cepstral coefficients (MFCCs) to classify and suppress non-speech frames.
-3. **Output:** Phase-inverted anti-noise is generated via I2S DAC to the tactical headset.
-4. **Telemetry:** Python dashboard visualizes real-time Time-Domain waveforms, FFT Spectrum Analysis, and SNR attenuation metrics.
+- ESP32-S3-WROOM-1 **N16P8**
+- **Two INMP441** I2S microphones
+- **UDA1334A** I2S stereo DAC
+- Wired earphones through a **stereo headphone amplifier**
 
-## ⚙️ C2 Dashboard Features
-* **Real-Time Oscilloscope:** Visualizes the raw vs. ML-cleaned audio waveforms.
-* **FFT Spectrogram:** Proves 0-4kHz human vocal preservation while low-frequency rumble bands collapse.
-* **Dynamic Noise Profiles:** Simulates Tank, Helicopter, and Artillery acoustic environments.
-* **Live SNR Telemetry:** Calculates Root Mean Square (RMS) variance for accurate dB reduction reporting.
+| Start here | Link |
+| --- | --- |
+| Project, architecture and verified limitations | [Project README](mounam-edge/README.md) |
+| Pin-by-pin hardware connections | [Wiring](mounam-edge/docs/WIRING.md) |
+| Ubuntu terminal build, flash and controls | [Quick start](mounam-edge/docs/QUICKSTART.md) |
+| Datasets, real recording and TinyML training | [Training](mounam-edge/docs/TRAINING.md) |
+| Test results and hardware measurement plan | [Validation](mounam-edge/docs/VALIDATION.md) |
+| Match to submitted presentation | [Idea alignment](mounam-edge/docs/IDEA_ALIGNMENT.md) |
 
-## 🛠️ Bill of Materials (BOM)
-Designed for mass deployment and strict cost efficiency:
-* **Compute:** ESP32-S3 WROOM-1 (~₹450)
-* **Input:** INMP441 I2S Omnidirectional Microphone (~₹150)
-* **Output:** MAX98357A I2S Amplifier (~₹120)
-* **Total Cost:** < ₹1,000 per node
+The new audio implementation is entirely offline, with synchronized dual-mic
+I2S/DMA, normalized LMS, residual filtering, a tiny speech-presence MLP and real
+USB-UART diagnostics. **Firmware builds from `mounam-edge/firmware`; host tools run
+from `mounam-edge`.** The older root `src/`, `platformio.ini`, Python dashboard
+and web files are an earlier separate prototype and are not the new build entry.
+
+This is a speech enhancement prototype. The bundled ML model is explicitly
+synthetic-demo trained; physical latency, real speech scores and ear-level
+hearing protection require the separate measurements described in the project.

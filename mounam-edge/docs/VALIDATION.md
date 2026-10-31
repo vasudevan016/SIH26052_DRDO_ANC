@@ -10,12 +10,22 @@
 | Sanitizers | Address/undefined behavior checks pass; local leak scanning disabled because the host prevents `/proc` thread inspection |
 | Dataset/training | Seeded 90-example synthetic corpus; 60 epochs; validation selects the model |
 | Software evaluation | Separate 18-example synthetic test split; real-speech metrics not computed |
-| ESP32-S3 firmware compilation | GitHub Actions compiles against ESP-IDF v5.4.3; inspect current PR check result |
+| ESP32-S3 firmware compilation | **Passed** ESP-IDF v5.4.3 build on commit `9b62e604a5b34aad8df219bad32ae63f3bbbcff3` |
 | Physical hardware | Not connected in this session; bring-up and measurements pending |
+
+CI explicitly verifies required N16P8 sdkconfig settings before compiling;
+`esp_psram` is an explicit component dependency so its Kconfig options are loaded.
+On the physical board, live `psram_bytes` telemetry confirms detected RAM.
 
 The local sanitizer command was `ASAN_OPTIONS=detect_leaks=0 make sanitize`.
 Ordinary GitHub runners can run `make sanitize` with their default leak scanner.
 No memory leak verification is inferred from the local restricted-host run.
+
+Both host and firmware jobs passed in
+[this verification run](https://github.com/vasudevan016/SIH26052_DRDO_ANC/actions/runs/41231551530).
+It also provides the built ESP32-S3 binary artifacts. No board was flashed or
+connected during these checks. The source model's original training environment
+is recorded in [demo_environment.json](../models/demo_environment.json).
 
 ## Acceptance measurements
 

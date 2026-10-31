@@ -39,6 +39,8 @@ With the committed seeds and 90 examples, there are 54 train, 18 validation and
 18 test examples. The shipped model's identifier is recorded in its JSON and
 header. Small differences in math libraries can change the final trained
 weights; C++/Python prediction parity is checked for the actual exported model.
+The original training versions are recorded in
+[models/demo_environment.json](../models/demo_environment.json).
 
 ## Use real recordings
 

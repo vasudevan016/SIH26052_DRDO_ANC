@@ -44,6 +44,7 @@ jobs:
         run: |
           . /opt/esp/idf/export.sh
           idf.py set-target esp32s3
+          python ../tools/check_sdkconfig.py sdkconfig
           idf.py build
       - uses: actions/upload-artifact@v4
         with:

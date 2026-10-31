@@ -45,6 +45,7 @@ Return to your clone's `mounam-edge/firmware` directory:
 ```bash
 cd /path/to/SIH26052_DRDO_ANC/mounam-edge/firmware
 idf.py set-target esp32s3
+python ../tools/check_sdkconfig.py sdkconfig
 idf.py build
 ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
 ```
@@ -100,7 +101,7 @@ python -m tools.device --port /dev/ttyUSB0 monitor --seconds 10
 python -m tools.device --port /dev/ttyUSB0 command 'stats'
 ```
 
-Expect `status: streaming`, `muted: true`, and RMS values for both microphones.
+Expect `status: streaming`, `muted: true`, `psram_bytes: 8388608`, and RMS values for both microphones.
 Speak near each mic separately. The primary is the left I2S slot and reference
 is the right. A channel stuck at zero suggests L/R, shared SD or power wiring
 needs correction. A healthy run should keep `rx_overflows`, `io_errors` and
