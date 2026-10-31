@@ -1,0 +1,18 @@
+{
+  "board": "ESP32-S3-WROOM-1-N16P8",
+  "chip": "esp32s3",
+  "filename": "mounam-esp32s3-n16p8.bin",
+  "flash_offset": "0x0",
+  "flash_settings": {
+    "flash_mode": "dio",
+    "flash_size": "16MB",
+    "flash_freq": "80m"
+  },
+  "bytes": 304720,
+  "sha256": "f4bc7567fde7c2ba5d37e1cf2c3798335df0628051f34abaee1dcaac3998a647",
+  "sources_sha256": "3366730c762ee21a82fe5b2870ed682641e1d009b39d55adefc87e4e9e6bca73",
+  "source_commit": "342f63c534feb015e2f8616ce195b3ebdfd4da85",
+  "idf_version": "v5.4.3",
+  "model_provenance": "synthetic_demo",
+  "note": "CI-built; hardware timing and real speech quality need measurement."
+}
