@@ -15,6 +15,10 @@ def main():
         "CONFIG_SPIRAM_USE_MALLOC=y",
         "CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240",
         "CONFIG_FREERTOS_HZ=1000",
+        "CONFIG_ESP_CONSOLE_UART_CUSTOM=y",
+        "CONFIG_ESP_CONSOLE_UART_NUM=0",
+        "CONFIG_ESP_CONSOLE_UART_TX_GPIO=43",
+        "CONFIG_ESP_CONSOLE_UART_RX_GPIO=44",
         "CONFIG_ESP_CONSOLE_UART_BAUDRATE=921600",
     }
     actual = set(path.read_text().splitlines())
