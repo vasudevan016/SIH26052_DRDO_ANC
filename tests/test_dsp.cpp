@@ -1,4 +1,5 @@
 #include "mounam_dsp.h"
+#include "timing_stats.h"
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -67,5 +68,29 @@ int main() {
     settings.primary_delay = 1000; settings.output_gain = std::numeric_limits<float>::quiet_NaN();
     engine.configure(settings);
     assert(engine.settings().primary_delay == 64 && engine.settings().output_gain == 0);
+    Engine onset;
+    Settings quiet; quiet.muted = false;
+    onset.configure(quiet);
+    std::memset(p,0,sizeof(p)); std::memset(r,0,sizeof(r));
+    for (unsigned i=0;i<200;++i) onset.process(p,r,out);
+    p[3]=0.4f; onset.process(p,r,out);
+    assert(onset.metrics().impulse_blocks == 0); // Speech-like onset absent in reference.
+    Engine shock;
+    p[3]=r[3]=0.4f; shock.process(p,r,out);
+    assert(shock.metrics().impulse_blocks == 1);
+    quiet.noise_only = true; quiet.muted = false;
+    onset.configure(quiet); onset.process(p,r,out);
+    assert(onset.settings().muted);
+    for (float y:out) assert(y==0);
+    NeuralBands nb;
+    for(unsigned i=0;i<2000;++i){
+        float x=noise(random), sum=0;
+        for(float b:nb.tick(x))sum+=b;
+        assert(std::fabs(sum-x)<1e-6f);
+    }
+    TimingStats timing;
+    for(unsigned i=0;i<100;++i)timing.observe(i);
+    assert(timing.percentile_upper(95)>=94 && timing.percentile_upper(95)<=112);
+    timing.observe(7000); assert(timing.maximum==7000 && timing.percentile_upper(100)==7000);
     std::puts("DSP invariants passed.");
 }

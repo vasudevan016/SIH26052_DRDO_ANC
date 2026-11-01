@@ -56,6 +56,18 @@ def package(build, output, source_commit, root=ROOT):
         raise ValueError("Missing ESP image headers.")
     if int.from_bytes(image[12:14], "little") != 9:
         raise ValueError("Image chip identifier is not ESP32-S3.")
+    model_identity = {}
+    for key,filename in (("speech","model_weights.h"),("neural","neural_weights.h")):
+        header = root/"components/mounam_dsp/include"/filename
+        if not header.exists():
+            continue
+        text = header.read_text()
+        identifier = re.search(r'kModelId = "([^"]+)"',text)
+        provenance = re.search(r'kProvenance = "([^"]+)"',text)
+        if identifier and identifier.group(1).encode() not in image:
+            raise ValueError(f"Built image does not contain the current {key} model ID; rebuild firmware.")
+        model_identity[key] = {"id":identifier.group(1) if identifier else None,
+            "provenance":provenance.group(1) if provenance else None}
     output.mkdir(parents=True, exist_ok=True)
     (output/IMAGE).write_bytes(image)
     metadata = dict(board="ESP32-S3-WROOM-1-N16P8", chip="esp32s3", filename=IMAGE,
@@ -63,6 +75,7 @@ def package(build, output, source_commit, root=ROOT):
         sha256=hashlib.sha256(image).hexdigest(), sources_sha256=source_digest(root),
         source_commit=source_commit, idf_version="v5.4.3",
         model_provenance=re.search(r'kProvenance = "([^"]+)"', (root/"components/mounam_dsp/include/model_weights.h").read_text()).group(1),
+        models=model_identity,
         note="CI-built; hardware timing and real speech quality need measurement.")
     (output/"manifest.json").write_text(json.dumps(metadata, indent=2)+"\n")
     return metadata

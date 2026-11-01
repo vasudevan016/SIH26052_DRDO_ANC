@@ -91,6 +91,7 @@ void Engine::configure(const Settings& s) {
     settings_ = s;
     settings_.output_gain = std::isfinite(s.output_gain) ? clamp(s.output_gain, 0, 1) : 0;
     settings_.primary_delay = std::min(s.primary_delay, 64u);
+    if (settings_.noise_only) settings_.muted = true;
     if (static_cast<unsigned>(s.mode) > 3) settings_.mode = Mode::Hybrid;
 }
 void Engine::process(const float* primary, const float* reference, float* output,
@@ -100,15 +101,21 @@ void Engine::process(const float* primary, const float* reference, float* output
     const float probability = settings_.noise_only ? 0 : (settings_.mode == Mode::Hybrid ? speech_probability(f)
         : ((f[2] > 0.15f && f[5] > 0.15f) ? 0.9f : 0.1f));
     metrics_.speech_probability = probability;
-    float power = 0, ref_power = 0, peak = 0;
+    float power = 0, ref_power = 0, peak = 0, reference_peak = 0;
     for (size_t i = 0; i < kBlock; ++i) {
         power += hp[i]*hp[i]; ref_power += hr[i]*hr[i];
         peak = std::max(peak, std::fabs(hp[i]));
+        reference_peak = std::max(reference_peak, std::fabs(hr[i]));
         if (std::fabs(primary[i]) >= 0.98f || std::fabs(reference[i]) >= 0.98f) ++metrics_.input_clipped;
     }
     power /= kBlock; ref_power /= kBlock;
-    const bool impulse = peak > 0.12f && peak > 7.0f * std::sqrt(previous_power_ + 1e-8f);
+    // A near-mouth plosive alone must not trigger the noise impulse attenuator.
+    const bool reference_shock = reference_peak > 0.07f
+        && reference_peak > 7.0f*std::sqrt(previous_reference_power_+1e-8f);
+    const bool impulse = reference_shock && peak > 0.12f
+        && peak > 7.0f * std::sqrt(previous_power_ + 1e-8f);
     previous_power_ += 0.08f * (power - previous_power_);
+    previous_reference_power_ += 0.08f * (ref_power-previous_reference_power_);
     if (impulse) { impulse_gain_ = 0.15f; ++metrics_.impulse_blocks; }
     const bool speech_guard = !settings_.noise_only && f[2] > 0.3f && f[5] > 0.18f;
     const float adapt = (settings_.hold || impulse || speech_guard) ? 0.0f

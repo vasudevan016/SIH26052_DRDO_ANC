@@ -1,4 +1,4 @@
-name: Train public-speech neural models
+name: Train public-speech neural models and reference-validated onset handling
 on:
   push:
     branches: [codex/mounam-neural-v2]
@@ -31,6 +31,8 @@ jobs:
       - name: Evaluate exact shared C++ inference on independent test speakers
         run: |
           cp data/public-v2/source_card.json models/public_data_sources.json
+          python -m tools.evaluate --manifest data/public-v2/manifest.jsonl --split validation --mode dsp --with-perceptual --output models/public_validation_dsp.json
+          python -m tools.evaluate --manifest data/public-v2/manifest.jsonl --split validation --mode hybrid --with-perceptual --output models/public_validation_hybrid.json
           python -m tools.evaluate --manifest data/public-v2/manifest.jsonl --mode primary --with-perceptual --output models/public_evaluation_primary.json
           python -m tools.evaluate --manifest data/public-v2/manifest.jsonl --mode dsp --with-perceptual --output models/public_evaluation_dsp.json
           python -m tools.evaluate --manifest data/public-v2/manifest.jsonl --mode hybrid --with-perceptual --output models/public_evaluation_hybrid.json

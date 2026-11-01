@@ -4,6 +4,7 @@ import math
 import select
 import sys
 import time
+import shutil
 from tools.device import open_port
 
 MODES = ("Original", "Reference", "DSP", "Hybrid ML")
@@ -18,7 +19,7 @@ def format_stats(s):
     return (f"{mode} | {'MUTED' if s.get('muted', True) else 'PLAYING'} | gain {s.get('gain', 0):.3f} | "
             f"mic P {dbfs(s.get('primary_rms', 0)):.0f} / R {dbfs(s.get('reference_rms', 0)):.0f} dBFS | "
             f"DSP peak {s.get('max_dsp_us', 0)} us | overruns {s.get('rx_overflows', 0)} | "
-            f"I/O {s.get('io_errors', 0)} | {s.get('status', 'waiting')}")
+            f"I/O {s.get('io_errors', 0)} | {'CALIBRATING: stay quiet' if s.get('calibrating') else s.get('status', 'waiting')}")
 
 
 def key_command(key, state):
@@ -26,6 +27,8 @@ def key_command(key, state):
         return {"1": "mode primary", "2": "mode dsp", "3": "mode hybrid"}[key]
     if key == "d":
         return "demo"
+    if key == "c":
+        return "calibrate"
     if key == "m":
         return "mute off" if state.get("muted", True) else "mute on"
     if key in ("+", "-"):
@@ -38,8 +41,8 @@ def key_command(key, state):
 
 def run(port):
     print("\nMOUNAM - live hardware console")
-    print("d Start | 1 Original | 2 DSP | 3 Hybrid | m Mute | +/- Volume | r Reset | q Quit and mute")
-    print("Model: synthetic demo. This display does not invent SNR/STOI/PESQ scores.")
+    print("c Calibrate (quiet 3s) | d Start | 1 Original | 2 DSP | 3 Neural | m Mute | +/- Gain | q Quit")
+    print("Live device metrics only. Acoustic latency and speech-quality scores are separate tests.")
     print("Use a headphone amplifier or powered line input, initially at minimum volume.\n")
     state = {}
     terminal = None
@@ -65,7 +68,15 @@ def run(port):
                         if message.get("type") == "stats":
                             state = message
                             last_stats = time.monotonic()
-                            print("\r\033[2K"+format_stats(state), end="", flush=True)
+                            if sys.stdout.isatty():
+                                width = max(50, shutil.get_terminal_size().columns-1)
+                                short = (f"{MODES[int(state.get('mode',3))%4]} "
+                                    f"{'CALIBRATING' if state.get('calibrating') else 'MUTED' if state.get('muted',True) else 'PLAY'} "
+                                    f"P{dbfs(state.get('primary_rms',0)):.0f} R{dbfs(state.get('reference_rms',0)):.0f}dB "
+                                    f"DSP{state.get('max_dsp_us',0)}us Ov{state.get('rx_overflows',0)} IO{state.get('io_errors',0)}")
+                                print("\r\033[2K"+short[:width], end="", flush=True)
+                            else:
+                                print(format_stats(state), flush=True)
                         elif message.get("error"):
                             print("\nBoard:", message["error"])
                     if len(pending) > 4096:

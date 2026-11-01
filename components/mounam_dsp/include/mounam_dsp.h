@@ -89,6 +89,6 @@ private:
     std::array<float, 4> noise_power_{{1e-8f, 1e-8f, 1e-8f, 1e-8f}};
     std::array<float, 4> band_power_{}, band_gain_{{1, 1, 1, 1}};
     size_t head_ = 0, delay_head_ = 0;
-    float previous_power_ = 1e-5f, impulse_gain_ = 1, ramp_ = 0;
+    float previous_power_ = 1e-5f, previous_reference_power_ = 1e-5f, impulse_gain_ = 1, ramp_ = 0;
 };
 }

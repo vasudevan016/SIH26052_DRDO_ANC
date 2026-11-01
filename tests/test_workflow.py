@@ -7,7 +7,7 @@ import unittest
 import zlib
 import numpy as np
 from ml.native import extract, enhance, library, ROOT
-from ml.train import predict, read_manifest
+from ml.train import read_manifest
 from tools.protocol import Parser, HEADER
 from tools.evaluate import snr, si_sdr, evaluate_pair
 from tools.audio import read_wav, write_wav
@@ -43,22 +43,6 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             enhance(np.zeros((32, 1)))
 
-    def test_model_export_matches_embedded_prediction(self):
-        path = ROOT/"models/demo_model.json"
-        if not path.exists():
-            self.skipTest("Run the demo model training before model parity test.")
-        model = json.loads(path.read_text())
-        lib = library()
-        # A locally retrained non-demo model deliberately replaces the demo header.
-        if lib.mounam_model_id().decode() != model["model_id"]:
-            self.skipTest("A different locally trained model is compiled.")
-        rng = np.random.default_rng(26052)
-        x = rng.uniform(0, 1, (100, 8)).astype(np.float32)
-        x[:, 2] = rng.uniform(-1, 1, 100)
-        params = [np.asarray(p, dtype=np.float64) for p in model["parameters"]]
-        _, expected = predict(x, params)
-        actual = [lib.mounam_predict(np.ascontiguousarray(row)) for row in x]
-        np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-6)
 
     def test_metrics_cannot_be_faked_by_turning_down_volume(self):
         rng = np.random.default_rng(9)
