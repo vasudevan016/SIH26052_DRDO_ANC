@@ -1,0 +1,26 @@
+name: Dashboard browser checks
+on:
+  push:
+    branches: [main, codex/mounam-neural-v2]
+    paths: ['ui/**','tools/dashboard.py','tools/check_dashboard.cjs','.github/workflows/dashboard.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --prefix /tmp/mounam-browser --no-audit --no-fund playwright
+      - name: Test responsive layout and serial controls
+        env:
+          NODE_PATH: /tmp/mounam-browser/node_modules
+        run: node tools/check_dashboard.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mounam-dashboard-checks
+          path: build/ui/*

@@ -1,147 +1,105 @@
-# Dataset, ML training and evaluation
+# Reproduce and retrain the real AI models
 
-The shipped learned model is a **speech-presence controller**, not a deep speech
-reconstructor. Eight causal features feed eight tanh hidden units and one sigmoid
-output. Its 81 float32 parameters occupy 324 bytes before alignment/metadata.
-NLMS does the main correlated-noise subtraction; the model controls adaptation
-and the residual postfilter. Everything executes on the ESP32-S3 at runtime.
+Inference runs entirely on the ESP32-S3. Training runs on a local computer or
+GitHub Actions. No raw microphone recordings or cloud connection are needed for
+normal device operation.
 
-## Reproduce the shipped demo
+## Models included in the release
 
-From the repository root, with the host virtual environment active:
+| Stage | Architecture | Job |
+| --- | --- | --- |
+| Speech controller | 8-8-1 tanh/sigmoid, float32 | Estimate speech presence and protect adaptive learning |
+| Suppression model | 26-24-8 tanh/sigmoid, per-row int8 weights | Predict eight frequency-band gains on the NLMS residual |
 
-```bash
-make
-python -m ml.make_dataset --demo --output data/demo --examples 90 --seed 26052
-OPENBLAS_NUM_THREADS=1 python -m ml.train --manifest data/demo/manifest.jsonl --model models/demo_model.json --header components/mounam_dsp/include/model_weights.h --epochs 60 --seed 180588
-make test
-python -m tools.evaluate --manifest data/demo/manifest.jsonl --mode hybrid --output models/demo_evaluation_hybrid.json
-python -m tools.evaluate --manifest data/demo/manifest.jsonl --mode dsp --output models/demo_evaluation_dsp.json
-```
+The second model uses 816 int8 weights, 32 float32 biases and 32 float32 scales:
+1,072 bytes of numeric parameters. Activations and DSP are float32; this is
+**weight quantization**, not an integer-only inference engine. The model does
+not use TensorFlow, ONNX, TensorRT or an external runtime on the MCU.
 
-Use a new output directory if `data/demo` already contains a dataset. The dataset
-generator refuses to overwrite an existing nonempty folder. Generated WAV/NPZ
-data is excluded from git by default. Preserve a corpus privately if it cannot
-be reproduced.
+Its features are eight smoothed residual powers, eight reference powers, eight
+log power ratios, speech probability and coherence. Features and oracle training
+targets are extracted through the exact C++ processing engine used on the board.
+The bounded least-squares band-gain targets use the known clean training signal;
+that signal is never available or required during inference.
 
-The demo uses harmonic voice-like signals with interruptions plus generated
-stationary, modulated and impulsive noise. They exercise the complete data and
-training path but do not establish human intelligibility or defence performance.
-The `synthetic_demo` provenance is compiled into firmware telemetry.
+## Reproduce the public-speech release
 
-Feature extraction calls the **same C++ implementation** as the board through a
-small native shared library. There is no separate Python approximation of the
-feature pipeline. NumPy trains the MLP with binary cross-entropy and Adam;
-the best validation loss selects the exported weights. Test examples are not
-used for training or model selection.
-
-With the committed seeds and 90 examples, there are 54 train, 18 validation and
-18 test examples. The shipped model's identifier is recorded in its JSON and
-header. Small differences in math libraries can change the final trained
-weights; C++/Python prediction parity is checked for the actual exported model.
-The original training versions are recorded in
-[models/demo_environment.json](../models/demo_environment.json).
-
-## Use real recordings
-
-Prepare **clean speech** recorded in quiet surroundings and separate noise WAV
-files. Place each speaker's files inside their own directory, for example:
-
-| Input path | Contents |
-| --- | --- |
-| `corpus/speech/speaker01/*.wav` | One speaker, quiet speech |
-| `corpus/speech/speaker02/*.wav` | Another speaker |
-| `corpus/speech/speaker03/*.wav` | Another speaker; at least three speaker folders required |
-| `corpus/noise/*.wav` | At least three independent noise recordings |
-
-Use more speakers, languages and noise sources for a useful evaluation. Include
-Tamil/Hindi/English speech if those are intended use cases, varied voices,
-stationary engines/fans, moving or modulated sources, wind, and recorded
-transients. Acquire noises as files or at ordinary playback levels. Include
-speech/noise mixtures at -10, -5, 0, 5, 10 and 15 dB nominal mixing SNR.
+In a separate host-tools terminal, from the repository root:
 
 ```bash
-python -m ml.make_dataset --speech-dir corpus/speech --noise-dir corpus/noise --output data/recorded-v1 --examples 600 --seconds 2 --seed 26052
-OPENBLAS_NUM_THREADS=1 python -m ml.train --manifest data/recorded-v1/manifest.jsonl --model models/recorded_model.json --header components/mounam_dsp/include/model_weights.h --epochs 100
-make test
-python -m tools.evaluate --manifest data/recorded-v1/manifest.jsonl --mode hybrid --output build/recorded-test.json
-```
-
-The loader selects channel 0 from source WAVs and resamples to 16 kHz. Speakers
-and noise files are split **before** mixing; a source ID cannot span splits.
-Byte-identical duplicate source files spanning splits are rejected. Different
-edits of the same recording still need manual grouping; their content hash alone
-cannot establish independence. Keep related recordings under the same speaker
-identity and curate independent noise sources.
-
-Mixtures include a causal primary noise path, small reference speech leakage,
-sensor-like noise and a common scale chosen to avoid clipping. These are simulated
-microphone paths. Reverberation, clipping augmentation and measured two-mic
-transfer functions remain additions for a stronger corpus; they are not
-implemented just because the problem statement mentions them.
-
-The generator writes each pair (`primary`, `reference`, `clean`) to NPZ and records
-its SHA-256 hash, split, source IDs, mixing SNR and provenance in a JSONL manifest.
-Training/evaluation verify those hashes and reject cross-split source reuse.
-Real defence noises, even when mixed with real speech, require a genuinely
-independent live-acoustic evaluation too.
-
-## Capture with your microphones
-
-```bash
-python -m tools.device --port /dev/ttyUSB0 capture --seconds 15 --output captures/quiet-speaker01-take01.wav
-python -m tools.audio captures/quiet-speaker01-take01.wav corpus/speech/speaker01/take01.wav --channel 0
-python -m tools.device --port /dev/ttyUSB0 capture --seconds 15 --output captures/fan-noise01.wav
-python -m tools.audio captures/fan-noise01.wav corpus/noise/fan-noise01.wav --channel 1
-```
-
-Record the speech take in quiet conditions and the noise take with no speech.
-Repeat for additional speakers/noise recordings. The first file's primary mic
-can serve as quiet speech; the second file's reference can serve as a noise
-source. A noisy two-mic recording itself does **not** supply a clean target.
-Never relabel its reference channel as clean speech.
-
-Raw board capture is two-channel PCM16 converted from the microphones' 24-bit
-samples. It preserves the captured level and can lose precision for very quiet
-signals. Serial capture uses sequence numbers and CRC-32; corrupt or missing
-blocks reject the capture rather than silently shifting alignment.
-
-## Evaluate the actual DSP
-
-`tools.evaluate` calls the compiled firmware DSP on the held-out split. It
-compares output against the clean target at the configured output gain, skips
-500 ms of filter startup by default and compensates only the explicitly selected
-primary delay. It reports input/output SNR and SI-SDR, with per-example results.
-For noise-only clips it reports noise-only reduction instead of undefined speech
-SNR. RMS attenuation of mixed speech is never presented as an SNR measurement.
-
-For real speech metrics, optionally install:
-
-```bash
+python3 -m venv .venv
+. .venv/bin/activate
 python -m pip install -r requirements-metrics.txt
-python -m tools.evaluate --manifest data/recorded-v1/manifest.jsonl --mode hybrid --with-perceptual --output build/recorded-perceptual-test.json
+make
+python -m ml.prepare_public --output data/public-v2 --examples 600 --speakers 120
+OPENBLAS_NUM_THREADS=1 python -m ml.train --manifest data/public-v2/manifest.jsonl --model models/speech_model.json --header components/mounam_dsp/include/model_weights.h --epochs 70
+make
+OPENBLAS_NUM_THREADS=1 python -m ml.train_neural --manifest data/public-v2/manifest.jsonl --model models/neural_model.json --header components/mounam_dsp/include/neural_weights.h --epochs 60
+make test
+python -m tools.evaluate --manifest data/public-v2/manifest.jsonl --mode hybrid --with-perceptual --output build/your-test-report.json
 ```
 
-Review the PESQ implementation/licensing requirements for your intended use.
-Missing optional libraries or an invalid perceptual test return null metrics
-with an explicit reason. Never compute/report intelligibility on the synthetic
-harmonic demo as evidence of human speech quality.
+A fresh empty corpus directory is required. The official TensorFlow mini Speech
+Commands archive is checked against the released SHA-256 pin. Training uses the
+training split only; validation loss selects checkpoints. Test-speaker metrics
+are computed after training. The checked-in training workflow reproduces these
+steps, records validation as well as test results, and exports both headers and
+provenance JSONs.
 
-## Deploy a retrained model
+The released corpus has 58 training speakers, 24 validation speakers and 38 test
+speakers. There are 360/120/120 paired clips respectively. Every clip contains
+two seconds of audio; each split contains both speech and noise-only examples.
+The generator simulates distinct causal mic paths, reference speech leakage,
+unshared sensor noise, changing levels and nominal mixing SNRs from -10 to 15 dB.
 
-The trainer writes ordinary C++ weights. No network download, dynamic model loader,
-TFLite interpreter, ONNX runtime or TensorRT is used on the ESP32-S3.
+The speech is genuinely human-recorded, but consists of short English commands.
+The noises are generated surrogates, not real gunfire, aircraft or field recordings.
+Nominal clean targets are the original recordings, which are not studio-isolated
+speech. These limits matter when interpreting the results.
 
-After exporting a new header, run `make` again so host replay uses those weights.
-Build and flash the firmware again from its ESP-IDF terminal:
+Small numerical differences across BLAS/compiler/library versions can change
+retrained weights. Use the committed JSON/header pair for exact release inference.
+Model IDs, header/JSON inference parity, data checksums, quantization error and
+per-example results are retained. No failed metric is replaced with a made-up
+number; reports retain valid counts and failure reasons.
+
+## Your own speech and noise
+
+Record quiet speech from several consented speakers and independent noises.
+For paired data creation, organize clean speech as `corpus/speech/<speaker>/*.wav`
+and noise as `corpus/noise/*.wav`. At least three speakers and three noise sources
+are required; use far more for meaningful validation. Include the languages and
+speakers expected in the final communication task.
 
 ```bash
-cd firmware
-idf.py build
-idf.py -p /dev/ttyUSB0 -b 460800 flash
+python -m ml.make_dataset --speech-dir corpus/speech --noise-dir corpus/noise --output data/your-corpus --examples 600 --seconds 2
+OPENBLAS_NUM_THREADS=1 python -m ml.train --manifest data/your-corpus/manifest.jsonl --model models/speech_model.json --header components/mounam_dsp/include/model_weights.h --epochs 100
+make
+OPENBLAS_NUM_THREADS=1 python -m ml.train_neural --manifest data/your-corpus/manifest.jsonl --model models/neural_model.json --header components/mounam_dsp/include/neural_weights.h --epochs 80
+make test
 ```
 
-Check `model` and `model_id` in live stats against the exported JSON. Keep a copy
-of each model JSON, its header, training manifest and held-out report. The shipped
-demo parity test checks the demo model only; when a different model is compiled,
-evaluate its predictions against its own exported parameters before release.
+Speakers and noise files are separated before mixing. Manifest hashes and source
+IDs are checked; related edits of the same recording still need manual grouping.
+Never use the same underlying speech/noise recording across training and test
+under different filenames.
+
+Capture your microphone pair with:
+
+```bash
+python -m tools.device --port /dev/ttyUSB0 capture --seconds 15 --output captures/take01.wav
+```
+
+This is primary/reference **input**, not noisy/clean ground truth or a recording
+of the DAC output. Quiet speech takes can supply source speech; speech-free noise
+takes can supply noise sources. Extract the intended channel with `tools.audio`.
+Sequence gaps and CRC failures reject the capture. Raw capture is PCM16 at 16 kHz.
+
+## Deployment after training
+
+Export both models, run inference-parity tests and evaluate a speaker-disjoint
+holdout. Rebuild/package/flash using [BUILD.md](BUILD.md). The flashing helper
+rejects an image when its source fingerprint no longer matches the source files.
+The package also checks that the compiled binary contains the current model IDs.
+Keep each model, header, source manifest and report together. New model training
+alone does not establish physical latency, acoustic safety or defence readiness.

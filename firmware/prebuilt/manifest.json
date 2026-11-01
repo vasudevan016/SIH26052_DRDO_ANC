@@ -8,11 +8,21 @@
     "flash_size": "16MB",
     "flash_freq": "80m"
   },
-  "bytes": 304720,
-  "sha256": "f4bc7567fde7c2ba5d37e1cf2c3798335df0628051f34abaee1dcaac3998a647",
-  "sources_sha256": "3366730c762ee21a82fe5b2870ed682641e1d009b39d55adefc87e4e9e6bca73",
-  "source_commit": "342f63c534feb015e2f8616ce195b3ebdfd4da85",
+  "bytes": 309792,
+  "sha256": "d7cb985791918100526aa2bb6f75ba220e5f0e44f666e1d4141f65ee44d7932a",
+  "sources_sha256": "11e960e2d419982fe8c8aa4930c9c7a291f300fbb7c7d6eeb03afb60699ce465",
+  "source_commit": "2ff9e50bf168a9e0e88ba1c57d5438f9e12d9bfb",
   "idf_version": "v5.4.3",
-  "model_provenance": "synthetic_demo",
+  "model_provenance": "public_human_speech_generated_noise",
+  "models": {
+    "speech": {
+      "id": "5c9e4fb2a9b2fada",
+      "provenance": "public_human_speech_generated_noise"
+    },
+    "neural": {
+      "id": "b01f7e44d2512bad",
+      "provenance": "public_human_speech_generated_noise"
+    }
+  },
   "note": "CI-built; hardware timing and real speech quality need measurement."
 }

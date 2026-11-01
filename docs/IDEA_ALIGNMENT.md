@@ -11,13 +11,13 @@ The presentation is not redistributed as a source-code asset.
 | I2S DMA capture | Actual full-duplex ESP-IDF I2S pipeline, fixed blocks and bounded queues |
 | Dedicated Core 1 DSP | Audio task pinned to Core 1; serial work on Core 0 |
 | LMS and Wiener mathematical filtering | Bounded normalized LMS plus four-band Wiener-style residual gains |
-| AI/ML-enabled problem statement | Tiny learned speech-presence MLP controlling the adaptive/postfilter stages; training/export included |
+| AI/ML-enabled problem statement | Human-speech-trained controller plus eight-band neural gain estimator; int8 weight export and independent-speaker evaluation included |
 | UDA1334A output | Actual I2S output, with DAC mute; added headphone amplifier required for 32-ohm earphones |
 | Air-gapped/offline operation | No Wi-Fi/Bluetooth initialization, cloud service, MQTT broker or OTA dependency |
 | Low latency under 5 ms | Explicit DSP and end-to-end measurement plan; 2-ms blocks alone do not prove this target |
-| ESP-DSP/vector math | Portable scalar baseline implemented; acceleration remains a measured optimization |
+| ESP-DSP/vector math | Small native C++ neural/DSP core implemented; no unmeasured assembly/vector speedup is claimed |
 | Low-cost/low-power production | Candidate architecture; power/BOM are measurements and procurement tasks, not measured results |
-| SNR >15 dB, STOI >0.85, PESQ >2.5 | Evaluation tools included; targets remain unverified on real speech/noise |
+| SNR >15 dB, STOI >0.85, PESQ >2.5 | Public-speech/generated-noise scores included; global means do not yet meet every target and field performance is unvalidated |
 | Full complex-domain/STFT or large neural enhancer | Not implemented in this MCU baseline; substantial model work needed if required by acceptance |
 
 ## Correct technical positioning

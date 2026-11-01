@@ -16,3 +16,6 @@ must be checked against the exact breakout and DevKit revision in use.
 The user's uploaded Mounam presentation and SIH26052 statement define the
 project's objective and chosen hardware. They are design inputs; their latency,
 protection, cost and performance assertions are not substituted for measurements.
+
+Neural training data and hybrid-model research attribution are recorded in
+[ATTRIBUTION.md](../ATTRIBUTION.md); measured results are in [RESULTS.md](RESULTS.md).

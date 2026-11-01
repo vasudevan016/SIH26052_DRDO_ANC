@@ -1,7 +1,7 @@
 CXX ?= g++
 CXXFLAGS ?= -O2 -std=c++17 -Wall -Wextra -Werror -pedantic
 DSP = components/mounam_dsp
-CPP = $(DSP)/mounam_dsp.cpp
+CPP = $(DSP)/mounam_dsp.cpp $(DSP)/neural.cpp
 HEADERS = $(wildcard $(DSP)/include/*.h)
 
 .PHONY: all test sanitize benchmark clean

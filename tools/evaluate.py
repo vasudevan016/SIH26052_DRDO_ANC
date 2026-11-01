@@ -31,8 +31,10 @@ def perceptual(clean, estimate, enabled):
             else:
                 from pesq import pesq
                 result[name] = float(pesq(16000, clean, estimate, "wb"))
-        except (ImportError, ValueError, RuntimeError) as exc:
+        except Exception as exc:
             reasons[name] = type(exc).__name__+": "+str(exc)
+        if result[name] is not None and not np.isfinite(result[name]):
+            result[name] = None; reasons[name] = "metric returned a non-finite result"
     return {**result, "perceptual_status": reasons or "computed"}
 
 
@@ -83,6 +85,8 @@ def main():
         summary[name] = {"mean": float(np.mean(values)), "median": float(np.median(values)), "count": len(values)} if values else None
     report = dict(mode=args.mode, model=library().mounam_model_provenance().decode(), gain=args.gain,
         model_id=library().mounam_model_id().decode(),
+        neural_model_id=library().mounam_neural_id().decode(),
+        neural_provenance=library().mounam_neural_provenance().decode(),
         split=args.split, warmup_ms=args.warmup_ms, primary_delay=args.delay,
         manifest_sha256=hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
         provenance=sorted({r["provenance"] for r in rows}), summary=summary, pairs=results,

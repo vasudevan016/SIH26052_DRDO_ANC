@@ -1,5 +1,7 @@
 #include "mounam_dsp.h"
 #include "model_weights.h"
+#include "neural_weights.h"
+#include "timing_stats.h"
 #include "sdkconfig.h"
 #include "driver/gpio.h"
 #include "driver/i2s_std.h"
@@ -61,13 +63,15 @@ void set_capture(bool value) {
     portEXIT_CRITICAL(&state_mux);
 }
 
-enum class Operation { Mode, Mute, Gain, Hold, Delay, Reset, Demo };
+enum class Operation { Mode, Mute, Gain, Hold, Delay, Reset, Demo, Calibrate };
 struct Command { Operation operation; float value; };
 struct Snapshot {
     Settings settings;
     Metrics metrics;
     uint32_t blocks = 0, max_dsp_us = 0, late_blocks = 0, io_errors = 0, capture_drops = 0;
     float dsp_ewma_us = 0;
+    uint32_t calibration_blocks = 0;
+    TimingStats timing;
     bool fault = false;
 };
 // Little endian on ESP32-S3. CRC-32 covers the 128-byte PCM payload.
@@ -81,7 +85,7 @@ struct __attribute__((packed)) CapturePacket {
 static_assert(sizeof(CapturePacket) == 148);
 
 void send_text(const char* format, ...) {
-    char line[1024];
+    char line[2048];
     va_list args;
     va_start(args, format);
     const int n = vsnprintf(line, sizeof(line), format, args);
@@ -135,6 +139,9 @@ void audio_task(void*) {
         Command c;
         while (xQueueReceive(command_queue, &c, 0) == pdTRUE) {
             Settings settings = engine.settings();
+            if (c.operation != Operation::Calibrate && s.calibration_blocks) {
+                s.calibration_blocks = 0; settings.noise_only = false;
+            }
             switch (c.operation) {
                 case Operation::Mode: settings.mode = static_cast<Mode>(unsigned(c.value)); break;
                 case Operation::Mute: settings.muted = c.value != 0; break;
@@ -144,7 +151,11 @@ void audio_task(void*) {
                 case Operation::Reset: settings.muted = true; engine.reset(); warmup = 200; break;
                 case Operation::Demo:
                     settings = Settings{}; settings.muted = false;
-                    engine.reset(); warmup = 200; break;
+                    break; // Keep learned acoustic-path coefficients after calibration.
+                case Operation::Calibrate:
+                    engine.reset(); settings.noise_only = true;
+                    settings.muted = true; settings.hold = false;
+                    s.calibration_blocks = 1500; break; // 3 s, without blocking either core.
             }
             engine.configure(settings);
         }
@@ -174,6 +185,7 @@ void audio_task(void*) {
         engine.process(primary, reference, output);
         gpio_set_level(static_cast<gpio_num_t>(CONFIG_MOUNAM_PROBE), 0);
         const uint32_t elapsed = uint32_t(esp_timer_get_time() - start);
+        s.timing.observe(elapsed);
         if (elapsed > s.max_dsp_us) s.max_dsp_us = elapsed;
         s.dsp_ewma_us += 0.01f * (float(elapsed)-s.dsp_ewma_us);
         if (elapsed >= 1000000*kBlock/kSampleRate) ++s.late_blocks;
@@ -197,6 +209,10 @@ void audio_task(void*) {
         }
         ++s.blocks;
         s.settings = engine.settings(); s.metrics = engine.metrics();
+        if (s.calibration_blocks && --s.calibration_blocks == 0) {
+            Settings done = engine.settings(); done.noise_only = false; done.muted = true;
+            engine.configure(done); s.settings = done;
+        }
         // Report silence truthfully during startup.
         if (warmup) s.metrics.output_rms = 0;
         // Control needs 10-Hz snapshots, not 500 cross-core copies per second.
@@ -209,7 +225,9 @@ void print_stats(const Snapshot& s) {
         "\"primary_rms\":%.7f,\"reference_rms\":%.7f,\"output_rms\":%.7f,\"speech_probability\":%.4f,"
         "\"blocks\":%lu,\"max_dsp_us\":%lu,\"dsp_ewma_us\":%.2f,\"late_blocks\":%lu,\"rx_overflows\":%lu,"
         "\"io_errors\":%lu,\"input_clipped\":%lu,\"output_limited\":%lu,\"impulse_blocks\":%lu,"
-        "\"capture_drops\":%lu}\n",
+        "\"capture_drops\":%lu,\"calibrating\":%s,\"neural_model\":\"%s\",\"neural_id\":\"%s\","
+        "\"dsp_p50_upper_us\":%lu,\"dsp_p95_upper_us\":%lu,\"dsp_p99_upper_us\":%lu,"
+        "\"band_gains\":[%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f]}\n",
         s.fault ? "fault_reboot_required" : "streaming", (unsigned long)esp_psram_get_size(), model::kProvenance, model::kModelId,
         unsigned(s.settings.mode), s.settings.muted ? "true" : "false", double(s.settings.output_gain),
         s.settings.hold ? "true" : "false", s.settings.primary_delay,
@@ -217,7 +235,13 @@ void print_stats(const Snapshot& s) {
         double(s.metrics.speech_probability), (unsigned long)s.blocks, (unsigned long)s.max_dsp_us,
         double(s.dsp_ewma_us), (unsigned long)s.late_blocks, (unsigned long)overflow_count(), (unsigned long)s.io_errors,
         (unsigned long)s.metrics.input_clipped, (unsigned long)s.metrics.output_limited,
-        (unsigned long)s.metrics.impulse_blocks, (unsigned long)s.capture_drops);
+        (unsigned long)s.metrics.impulse_blocks, (unsigned long)s.capture_drops,
+        s.calibration_blocks ? "true" : "false", neural::kProvenance, neural::kModelId,
+        (unsigned long)s.timing.percentile_upper(50), (unsigned long)s.timing.percentile_upper(95),
+        (unsigned long)s.timing.percentile_upper(99),
+        double(s.metrics.band_gains[0]), double(s.metrics.band_gains[1]), double(s.metrics.band_gains[2]),
+        double(s.metrics.band_gains[3]), double(s.metrics.band_gains[4]), double(s.metrics.band_gains[5]),
+        double(s.metrics.band_gains[6]), double(s.metrics.band_gains[7]));
 }
 bool parse_number(const char* text, float low, float high, float& result) {
     char* end = nullptr;
@@ -236,7 +260,7 @@ void handle_line(const char* line, const Snapshot& s) {
     if (capture_active()) return; // In binary mode only capture off is a valid control command.
     if (!std::strcmp(line, "stats")) { print_stats(s); return; }
     if (!std::strcmp(line, "help")) {
-        send_text("Commands: demo; stats; mode hybrid|dsp|primary|reference; mute on|off; gain 0..1; "
+        send_text("Commands: demo; calibrate (stay quiet 3s, output muted); stats; mode hybrid|dsp|primary|reference; mute on|off; gain 0..1; "
             "hold on|off; delay 0..64; reset; capture on|off\n"); return;
     }
     if (s.fault) { send_text("{\"error\":\"audio fault; press RESET to reboot\"}\n"); return; }
@@ -244,6 +268,7 @@ void handle_line(const char* line, const Snapshot& s) {
     float value;
     bool valid = true;
     if (!std::strcmp(line, "demo")) command = {Operation::Demo, 0};
+    else if (!std::strcmp(line, "calibrate")) command = {Operation::Calibrate, 0};
     else if (!std::strcmp(line, "mode primary")) command = {Operation::Mode, 0};
     else if (!std::strcmp(line, "mode reference")) command = {Operation::Mode, 1};
     else if (!std::strcmp(line, "mode dsp")) command = {Operation::Mode, 2};
@@ -268,7 +293,7 @@ void control_task(void*) {
     int64_t last_stats = 0;
     bool raw_button = true, stable_button = true, long_press_sent = false;
     int64_t button_changed = 0, button_pressed = 0;
-    send_text("Mounam edge v1.1 | 16000 Hz | UART 921600 | output MUTED | type help\n");
+    send_text("Mounam v2.0 | dual-mic neural enhancement | 16000 Hz | output MUTED | type help\n");
     for (;;) {
         xQueuePeek(snapshot_queue, &s, 0);
         CapturePacket packet;

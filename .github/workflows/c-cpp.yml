@@ -1,7 +1,7 @@
 name: Mounam edge verification
 on:
   push:
-    branches: [main, codex/mounam-edge-from-scratch]
+    branches: [main, codex/mounam-edge-from-scratch, codex/mounam-neural-v2]
     paths-ignore: ['firmware/prebuilt/**', 'docs/**', 'README.md']
   pull_request:
     paths-ignore: ['firmware/prebuilt/**', 'docs/**', 'README.md']

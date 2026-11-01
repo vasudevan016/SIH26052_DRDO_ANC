@@ -130,13 +130,15 @@ def main():
             best_loss, best = validation["cross_entropy"], [p.copy() for p in parameters]
         if (epoch+1) % 20 == 0 or epoch == args.epochs-1:
             print(f"epoch={epoch+1} validation_cross_entropy={validation['cross_entropy']:.5f}")
-    provenance = "synthetic_demo" if any(r["provenance"] == "synthetic_demo" for r in rows) else "recorded_sources_synthetic_mixtures"
+    provenances = {r["provenance"] for r in rows}
+    provenance = "synthetic_demo" if "synthetic_demo" in provenances else (
+        "public_human_speech_generated_noise" if provenances == {"public_human_speech_generated_noise"} else "recorded_sources_synthetic_mixtures")
     model = dict(architecture="8-8-1 tanh/sigmoid float32", features="mounam-features-v1",
         provenance=provenance, seed=args.seed, epochs=args.epochs,
         manifest_sha256=hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
         training=scores(x, y, best), validation=scores(vx, vy, best),
         parameters=[p.astype(np.float32).tolist() for p in best],
-        limitations="Speech-presence controller, not a neural speech reconstructor. Demo has no real-speech validation.")
+        limitations="Speech-presence controller; inspect provenance and the separate neural band-mask model and held-out report.")
     model["model_id"] = hashlib.sha256(json.dumps(model, sort_keys=True).encode()).hexdigest()[:16]
     args.model.parent.mkdir(parents=True, exist_ok=True)
     args.model.write_text(json.dumps(model, indent=2)+"\n")
