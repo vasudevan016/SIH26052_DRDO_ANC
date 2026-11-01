@@ -8,12 +8,14 @@ inline constexpr size_t kBlock = 32;
 inline constexpr size_t kFeatures = 8;
 inline constexpr size_t kTaps = 64;
 inline constexpr unsigned kSampleRate = 16000;
+inline constexpr size_t kNeuralFeatures = 26, kNeuralBands = 8;
 
 enum class Mode : unsigned { Primary = 0, Reference = 1, Dsp = 2, Hybrid = 3 };
 struct Settings {
     Mode mode = Mode::Hybrid;
     bool muted = true;
     bool hold = false;
+    bool noise_only = false; // Explicit, muted noise calibration only.
     float output_gain = 0.05f;
     unsigned primary_delay = 0; // 0..64 samples; adds delay, never predicts noise
 };
@@ -21,6 +23,7 @@ struct Metrics {
     float primary_rms = 0, reference_rms = 0, output_rms = 0;
     float speech_probability = 0, max_weight = 0;
     uint32_t input_clipped = 0, output_limited = 0, impulse_blocks = 0;
+    std::array<float, kNeuralBands> band_gains{{1,1,1,1,1,1,1,1}};
 };
 struct DcBlock {
     float x = 0, y = 0;
@@ -29,6 +32,22 @@ struct DcBlock {
 struct Bands {
     float l0 = 0, l1 = 0, l2 = 0;
     std::array<float, 4> tick(float sample);
+};
+struct NeuralBands {
+    std::array<float, 7> lowpass{};
+    std::array<float, kNeuralBands> tick(float sample);
+};
+void neural_predict(const float* features, float* gains);
+class NeuralPostfilter {
+public:
+    void process(const float* residual, const float* reference, const float* clean,
+                 float probability, float coherence, bool enabled, float* output,
+                 float* training_features = nullptr, float* targets = nullptr);
+    const std::array<float, kNeuralBands>& gains() const { return gains_; }
+private:
+    NeuralBands residual_bands_, reference_bands_, clean_bands_;
+    std::array<float, kNeuralBands> rp_{}, np_{}, cross_{};
+    std::array<float, kNeuralBands> gains_{{1,1,1,1,1,1,1,1}};
 };
 
 // Causal 20-ms exponentially smoothed features. No FFT/lookahead allocation.
@@ -56,12 +75,15 @@ public:
     void configure(const Settings& settings);
     const Settings& settings() const { return settings_; }
     const Metrics& metrics() const { return metrics_; }
-    void process(const float* primary, const float* reference, float* output);
+    void process(const float* primary, const float* reference, float* output,
+                 const float* clean = nullptr, float* training_features = nullptr, float* targets = nullptr);
 private:
     Settings settings_{};
     Metrics metrics_{};
     Features features_;
     Bands post_bands_;
+    NeuralPostfilter neural_post_;
+    DcBlock clean_dc_;
     std::array<float, kTaps> weights_{}, history_{};
     std::array<float, 65> primary_delay_{};
     std::array<float, 4> noise_power_{{1e-8f, 1e-8f, 1e-8f, 1e-8f}};

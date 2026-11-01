@@ -1,5 +1,6 @@
 #include "mounam_dsp.h"
 #include "model_weights.h"
+#include "neural_weights.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -92,11 +93,12 @@ void Engine::configure(const Settings& s) {
     settings_.primary_delay = std::min(s.primary_delay, 64u);
     if (static_cast<unsigned>(s.mode) > 3) settings_.mode = Mode::Hybrid;
 }
-void Engine::process(const float* primary, const float* reference, float* output) {
+void Engine::process(const float* primary, const float* reference, float* output,
+    const float* clean, float* training_features, float* targets) {
     float hp[kBlock], hr[kBlock], f[kFeatures];
     features_.process(primary, reference, hp, hr, f);
-    const float probability = settings_.mode == Mode::Hybrid ? speech_probability(f)
-        : ((f[2] > 0.15f && f[5] > 0.15f) ? 0.9f : 0.1f);
+    const float probability = settings_.noise_only ? 0 : (settings_.mode == Mode::Hybrid ? speech_probability(f)
+        : ((f[2] > 0.15f && f[5] > 0.15f) ? 0.9f : 0.1f));
     metrics_.speech_probability = probability;
     float power = 0, ref_power = 0, peak = 0;
     for (size_t i = 0; i < kBlock; ++i) {
@@ -108,11 +110,12 @@ void Engine::process(const float* primary, const float* reference, float* output
     const bool impulse = peak > 0.12f && peak > 7.0f * std::sqrt(previous_power_ + 1e-8f);
     previous_power_ += 0.08f * (power - previous_power_);
     if (impulse) { impulse_gain_ = 0.15f; ++metrics_.impulse_blocks; }
-    const bool speech_guard = f[2] > 0.3f && f[5] > 0.18f;
+    const bool speech_guard = !settings_.noise_only && f[2] > 0.3f && f[5] > 0.18f;
     const float adapt = (settings_.hold || impulse || speech_guard) ? 0.0f
         : 0.12f * (1.0f - 0.98f * probability);
     float out_power = 0;
     std::array<float, 4> current_band_power{};
+    float residual[kBlock], classical[kBlock], clean_hp[kBlock], neural_output[kBlock];
     for (size_t i = 0; i < kBlock; ++i) {
         primary_delay_[delay_head_] = hp[i];
         const size_t read = (delay_head_ + primary_delay_.size() - settings_.primary_delay) % primary_delay_.size();
@@ -126,6 +129,8 @@ void Engine::process(const float* primary, const float* reference, float* output
             estimate += weights_[j] * x; norm += x*x;
         }
         const float error = p - estimate;
+        residual[i] = error;
+        if (clean) clean_hp[i] = clean_dc_.tick(finite_audio(clean[i]));
         if (adapt > 0 && ref_power > 1e-8f) {
             const float step = adapt * clamp(error, -1, 1) / norm;
             for (size_t j = 0; j < kTaps; ++j) {
@@ -139,6 +144,13 @@ void Engine::process(const float* primary, const float* reference, float* output
             current_band_power[j] += bands[j]*bands[j] / kBlock;
             enhanced += band_gain_[j] * bands[j];
         }
+        classical[i] = enhanced;
+    }
+    neural_post_.process(residual, hr, clean ? clean_hp : nullptr, probability, f[7],
+        settings_.mode == Mode::Hybrid, neural_output, training_features, targets);
+    metrics_.band_gains = neural_post_.gains();
+    for (size_t i = 0; i < kBlock; ++i) {
+        const float enhanced = settings_.mode == Mode::Hybrid && neural::kReady ? neural_output[i] : classical[i];
         float chosen = enhanced * impulse_gain_;
         if (settings_.mode == Mode::Primary) chosen = hp[i];
         if (settings_.mode == Mode::Reference) chosen = hr[i];

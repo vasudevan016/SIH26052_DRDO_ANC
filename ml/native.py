@@ -23,6 +23,10 @@ def library():
     lib.mounam_predict.restype = ct.c_float
     lib.mounam_model_provenance.restype = ct.c_char_p
     lib.mounam_model_id.restype = ct.c_char_p
+    lib.mounam_neural_id.restype = ct.c_char_p
+    lib.mounam_neural_provenance.restype = ct.c_char_p
+    lib.mounam_neural_predict.argtypes = [F32, F32]
+    lib.mounam_training.argtypes = [ct.c_void_p, F32, F32, F32, F32, ct.c_size_t]
     return lib
 
 
@@ -69,3 +73,22 @@ def enhance(stereo, mode="hybrid", gain=0.05, hold=False, delay=0):
     finally:
         lib.mounam_destroy(handle)
     return result[:original]
+
+
+def training_features(stereo, clean):
+    audio, original = stereo_array(stereo)
+    clean = np.asarray(clean, dtype=np.float32)
+    if clean.ndim != 1 or len(clean) != original or not np.isfinite(clean).all():
+        raise ValueError("Expected a finite, length-matched mono clean target.")
+    clean = np.ascontiguousarray(np.pad(clean, (0, len(audio)-original)))
+    features = np.empty((len(audio)//32, 26), dtype=np.float32)
+    targets = np.empty((len(audio)//32, 8), dtype=np.float32)
+    lib = library(); handle = lib.mounam_create()
+    if not handle:
+        raise MemoryError("Unable to allocate DSP.")
+    try:
+        lib.mounam_configure(handle, 3, 1, 0.05, 0, 0)
+        lib.mounam_training(handle, audio, clean, features, targets, len(audio))
+    finally:
+        lib.mounam_destroy(handle)
+    return features, targets

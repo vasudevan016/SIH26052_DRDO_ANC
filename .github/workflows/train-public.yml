@@ -1,0 +1,44 @@
+name: Train public-speech neural models
+on:
+  push:
+    branches: [codex/mounam-neural-v2]
+    paths: ['ml/prepare_public.py', 'ml/train_neural.py', '.github/workflows/train-public.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  train:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install 'numpy<2' 'scipy<2' pyserial pystoi pesq
+      - run: make
+      - name: Download attributed public speech and prepare speaker-disjoint pairs
+        run: python -m ml.prepare_public --output data/public-v2 --examples 600 --speakers 120
+      - name: Train speech-presence model, then extract actual NLMS residual features
+        run: |
+          python -m ml.train --manifest data/public-v2/manifest.jsonl --model models/speech_model.json --header components/mounam_dsp/include/model_weights.h --epochs 70
+          make
+          python -m ml.train_neural --manifest data/public-v2/manifest.jsonl --model models/neural_model.json --header components/mounam_dsp/include/neural_weights.h --epochs 60
+          make test
+      - name: Evaluate exact shared C++ inference on independent test speakers
+        run: |
+          cp data/public-v2/source_card.json models/public_data_sources.json
+          python -m tools.evaluate --manifest data/public-v2/manifest.jsonl --mode primary --with-perceptual --output models/public_evaluation_primary.json
+          python -m tools.evaluate --manifest data/public-v2/manifest.jsonl --mode dsp --with-perceptual --output models/public_evaluation_dsp.json
+          python -m tools.evaluate --manifest data/public-v2/manifest.jsonl --mode hybrid --with-perceptual --output models/public_evaluation_hybrid.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mounam-public-speech-models
+          path: |
+            components/mounam_dsp/include/model_weights.h
+            components/mounam_dsp/include/neural_weights.h
+            models/*model.json
+            models/public_*.json
