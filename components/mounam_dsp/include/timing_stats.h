@@ -11,7 +11,7 @@ struct TimingStats {
     uint32_t count = 0, maximum = 0;
     uint64_t total_us = 0;
     void observe(uint32_t us) {
-        ++bins[std::min(us/16,127u)]; ++count; total_us += us;
+        ++bins[std::min<uint32_t>(us/16,127)]; ++count; total_us += us;
         maximum = std::max(maximum, us);
     }
     uint32_t percentile_upper(unsigned percent) const {

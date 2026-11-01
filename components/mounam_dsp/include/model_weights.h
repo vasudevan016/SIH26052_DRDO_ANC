@@ -3,7 +3,7 @@
 namespace mounam::model {
 inline constexpr bool kTrained = true;
 inline constexpr const char* kProvenance = "public_human_speech_generated_noise";
-inline constexpr const char* kModelId = "cfc6483d3e91742b";
+inline constexpr const char* kModelId = "5c9e4fb2a9b2fada";
 inline constexpr unsigned kInputs = 8, kHidden = 8;
 inline constexpr float kW1[8][8] = {
     {9.032080173e-01f, -5.161065981e-02f, 2.275262117e+00f, 3.031476736e-01f, -3.750178218e-01f, -1.153143644e+00f, -6.214578152e-01f, 2.792817652e-01f},

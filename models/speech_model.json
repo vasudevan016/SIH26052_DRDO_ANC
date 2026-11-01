@@ -6,7 +6,7 @@
   "epochs": 70,
   "manifest_sha256": "3d0370310b3c608393cfbf58775732e534babb5d0ad23888d3a47e6167297cd4",
   "training": {
-    "cross_entropy": 0.1618322134849113,
+    "cross_entropy": 0.16183221348491125,
     "accuracy": 0.9403507295173962,
     "precision": 0.9305855285451854,
     "recall": 0.7502732083285402,
@@ -125,5 +125,5 @@
     -1.2228223085403442
   ],
   "limitations": "Speech-presence controller; inspect provenance and the separate neural band-mask model and held-out report.",
-  "model_id": "cfc6483d3e91742b"
+  "model_id": "5c9e4fb2a9b2fada"
 }

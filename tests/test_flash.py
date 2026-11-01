@@ -50,6 +50,7 @@ class FlashTests(unittest.TestCase):
 
     def test_console_controls_and_real_metrics(self):
         self.assertEqual(key_command("d", {}), "demo")
+        self.assertEqual(key_command("c", {}), "calibrate")
         self.assertEqual(key_command("1", {}), "mode primary")
         self.assertEqual(key_command("m", {"muted":False}), "mute on")
         self.assertEqual(key_command("+", {"gain":0.25}), "gain 0.250")
